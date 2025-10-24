@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "influx"
+dynamic = ["version"]
+description = "InFlux: A Benchmark for Self-Calibration of Dynamic Intrinsics of Video Cameras"
+readme = "README.md"
+maintainers = [
+    {name = "Erich Liang", email = "el1685@princeton.edu"}
+]
+license = {file = "LICENSE_CODE.md"}
+requires-python = ">=3.8"
+dependencies = [
+    "requests",
+    "requests-toolbelt",
+    "tqdm",
+    "ffmpeg-python",
+    "huggingface-hub"
+]
+
+[project.optional-dependencies]
+dev = [
+    "evo",
+    "mplcursors",
+    "numpy",
+    "opencv-contrib-python",
+    "matplotlib",
+    "scipy",
+    "networkx",
+    "tqdm",
+    "pyqt5",
+    "g2o-python",
+    "pykalman",
+    "OneEuroFilter",
+    "filterpy",
+    "pyarrow",
+    "h5py",
+    "pomegranate",
+    "requests-toolbelt"
+]
+
+[project.urls]
+Homepage = "https://influx.cs.princeton.edu/"
+Repository = "https://github.com/Princeton-VL/InFlux"
+Paper = ""  # You can remove this or add a valid URL
+
+[project.scripts]
+influx-generate-sample = "scripts.generate_sample_submission:main"
+influx-upload = "scripts.upload_submission:main"
+influx-make-public = "scripts.make_submission_public:main"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "influx/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["influx", "scripts"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "influx",
+    "scripts",
+    "media",
+    "README.md",
+    "LICENSE_CODE.md"
+]
