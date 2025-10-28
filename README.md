@@ -44,12 +44,14 @@
 ## Citation
 If you use our benchmark, data, or method in your work, please cite our paper:
 ```
-@inproceedings{liang2025influx,
-      title={InFlux: A Benchmark for Self-Calibration of Dynamic Intrinsics of Video Cameras},
+@misc{liang2025influx,
+      title={InFlux: A Benchmark for Self-Calibration of Dynamic Intrinsics of Video Cameras}, 
       author={Erich Liang and Roma Bhattacharjee and Sreemanti Dey and Rafael Moschopoulos and Caitlin Wang and Michel Liao and Grace Tan and Andrew Wang and Karhan Kayan and Stamatis Alexandropoulos and Jia Deng},
-      booktitle={The Thirty-ninth Annual Conference on Neural Information Processing Systems Datasets and Benchmarks Track},
       year={2025},
-      url={https://openreview.net/forum?id=Yovojkx1Zm}
+      eprint={2510.23589},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2510.23589}, 
 }
 ```
 
