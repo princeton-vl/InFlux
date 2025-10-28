@@ -32,7 +32,7 @@
   </h4>
 </p>
 
-<h3 align="center"><a href="https://influx.cs.princeton.edu/">Website</a> | <a href="">Paper</a> </a></h3>
+<h3 align="center"><a href="https://influx.cs.princeton.edu/">Website</a> | <a href="https://arxiv.org/abs/2510.23589">Paper</a> </a></h3>
 
 <p align="center">
   <a href="">
