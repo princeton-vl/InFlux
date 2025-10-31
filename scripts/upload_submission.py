@@ -23,8 +23,6 @@ def request_verification(args, url=f"{website}/request_submit/"):
     }
 
     response = session.post(url, data=data, headers=headers)
-    print("Status code:", response.status_code)
-    print("Response text:", response.text)
 
     if response.status_code == 200:
         upload_id = response.json()['upload_id']
