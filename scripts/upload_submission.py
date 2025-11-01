@@ -97,8 +97,9 @@ def check_submission_validity(submission_file_path, submission_method_name, path
     method_name = submission['submission_metadata']['method_name']
     intr_type = submission['submission_metadata']['intrinsics_type']
 
-    if re.search(r'[<>:"/\\|?*\s]', method_name):
-        raise ValueError("Method name contains invalid characters. Please rename the method.")
+    # Only allow alphanumeric, underscore, and dash (not at start)
+    if not re.match(r'^[a-zA-Z0-9_][a-zA-Z0-9_-]*$', method_name):
+        raise ValueError("Method name contains invalid characters. Only letters, numbers, underscores, and dashes allowed. Please rename the method.")
 
     if intr_type not in ['rad-tan', 'mei']:
         raise ValueError("Intrinsics type must be either 'rad-tan' or 'mei'. Please email influxbenchmark@gmail.com if your method uses a different intrinsics model.")
