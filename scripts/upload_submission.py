@@ -133,7 +133,7 @@ def check_submission_validity(submission_file_path, submission_method_name, path
                     value = frame_data[key]
                     if not (isinstance(value, (int, float)) or value is None):
                         raise ValueError(f"Invalid type for '{key}' in frame {frame_idx} of video {video}: {value}")
-                    if value in ['fx', 'fy', 'cx', 'cy'] and value < 0:
+                    if key in ['fx', 'fy', 'cx', 'cy'] and value < 0:
                         raise ValueError(f"Negative value for '{key}' in frame {frame_idx} of video {video}: {value}")
 
     # Check that supplied method name matches submission metadata
