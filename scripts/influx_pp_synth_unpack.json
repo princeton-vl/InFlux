@@ -1,0 +1,21 @@
+{
+    "metadata": {},
+    "data_types": {
+        "surface_normal": {
+            "original_path_template": "{scene}/SurfaceNormal/SurfaceNormal_1_0_{frame:04d}_0.npy",
+            "packed_path_template": "{scene}/SurfaceNormal/SurfaceNormal_1_0.mkv",
+            "frame_start": 1,
+            "packing": {
+                "method": "3f32_unit_sphere_as_2f32_angles"
+            }
+        },
+        "surface_normal_sharp": {
+            "original_path_template": "{scene}/SurfaceNormalSharp/SurfaceNormalSharp_1_0_{frame:04d}_0.npy",
+            "packed_path_template": "{scene}/SurfaceNormalSharp/SurfaceNormalSharp_1_0.mkv",
+            "frame_start": 1,
+            "packing": {
+                "method": "3f32_unit_sphere_as_2f32_angles"
+            }
+        }
+    }
+}
