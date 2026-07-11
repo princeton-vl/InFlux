@@ -1,6 +1,14 @@
 import os
+import shutil
 import subprocess
 import tarfile
+import tempfile
+
+
+CVDPACK_MKV_ARCHIVES = {
+    os.path.join("SurfaceNormal", "SurfaceNormal_1_0.mkv"),
+    os.path.join("SurfaceNormalSharp", "SurfaceNormalSharp_1_0.mkv"),
+}
 
 
 def extract_files(scene_dir, split_dir, config_path, tmp_dir, remove_archives=True):
@@ -31,12 +39,13 @@ def _find_archives(scene_dir):
             path = os.path.join(root, name)
             if name.endswith(".tar.gz"):
                 tar_archives.append(path)
-            elif name.endswith(".mkv"):
+            elif os.path.relpath(path, scene_dir) in CVDPACK_MKV_ARCHIVES:
                 mkv_archives.append(path)
     return tar_archives, mkv_archives
 
 
 def _unpack_scene_mkvs(scene, split_dir, config_path, tmp_dir):
+    scene_tmp_dir = tempfile.mkdtemp(prefix=f"{scene}_", dir=tmp_dir)
     cmd = [
         "cvdpack",
         "unpack",
@@ -47,13 +56,16 @@ def _unpack_scene_mkvs(scene, split_dir, config_path, tmp_dir):
         "--config",
         config_path,
         "--tmp_folder",
-        tmp_dir,
+        scene_tmp_dir,
         "--subset",
         f"scene={scene}",
     ]
 
+    process_succeeded = False
     try:
+        print(f"Extracting MKV archives with cvdpack for {scene} (tmp: {scene_tmp_dir})...", flush=True)
         subprocess.run(cmd, check=True)
+        process_succeeded = True
     except FileNotFoundError as e:
         raise RuntimeError(
             "cvdpack not found. Install with: pip install cvdpack"
@@ -62,6 +74,20 @@ def _unpack_scene_mkvs(scene, split_dir, config_path, tmp_dir):
         raise RuntimeError(
             f"cvdpack unpack failed for {scene} (exit code {e.returncode})"
         ) from e
+    finally:
+        try:
+            shutil.rmtree(scene_tmp_dir)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            if process_succeeded:
+                raise RuntimeError(
+                    f"Failed to clean temporary directory for {scene}: {scene_tmp_dir}"
+                ) from e
+            print(
+                f"Warning: failed to clean temporary directory for {scene}: "
+                f"{scene_tmp_dir}: {e}"
+            )
 
 
 def _extract_tar(input_tar, remove_archive=True):

@@ -2,8 +2,7 @@ import argparse
 import glob
 import os
 
-# Disable hf-xet by default. Must happen before importing huggingface_hub.
-os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+os.environ.setdefault("HF_XET_HIGH_PERFORMANCE", "1")
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
 
 from extract_tiffs import extract_tiffs
