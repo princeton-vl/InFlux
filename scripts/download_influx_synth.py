@@ -73,7 +73,7 @@ def download_dataset(local_dir=f"{REPO_ROOT}/influx_synth_data", scenes=SCENES, 
     """Download selected scenes/modalities of the InFlux-Synth dataset from Hugging Face Hub."""
     print(f"Downloading InFlux-Synth ({', '.join(scenes)}) with extras ({', '.join(extras)}) to {local_dir}")
     snapshot_download(
-        repo_id="erichliang/InFlux-Synth",
+        repo_id="princeton-vl/InFlux-Synth",
         repo_type="dataset",
         local_dir=local_dir,
         allow_patterns=build_allow_patterns(scenes, extras, sample),

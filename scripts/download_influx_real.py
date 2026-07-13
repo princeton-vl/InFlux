@@ -23,7 +23,7 @@ def build_allow_patterns(partitions):
 def download_dataset(local_dir=f"{REPO_ROOT}/influx_real_data", partitions=PARTITIONS, max_workers=8):
     """Download selected partitions of the InFlux dataset from Hugging Face Hub."""
     snapshot_download(
-        repo_id="erichliang/InFlux-Real",
+        repo_id="princeton-vl/InFlux-Real",
         repo_type="dataset",
         local_dir=local_dir,
         allow_patterns=build_allow_patterns(partitions),
