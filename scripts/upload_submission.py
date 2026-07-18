@@ -368,21 +368,17 @@ def check_submission_validity(
                         f"of video {video}: {value}"
                     )
 
-                if not math.isfinite(float(value)):
+                try:
+                    numeric_value = float(value)
+                except (OverflowError, TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"Value for '{key}' in frame {frame_idx} of video "
+                        f"{video} cannot be represented as float64: {value}"
+                    ) from exc
+
+                if not math.isfinite(numeric_value):
                     raise ValueError(
                         f"Non-finite value for '{key}' in frame {frame_idx} "
-                        f"of video {video}: {value}"
-                    )
-
-                if key in ['fx', 'fy'] and value <= 0:
-                    raise ValueError(
-                        f"Non-positive value for '{key}' in frame {frame_idx} "
-                        f"of video {video}: {value}"
-                    )
-
-                if key in ['cx', 'cy'] and value < 0:
-                    raise ValueError(
-                        f"Negative value for '{key}' in frame {frame_idx} "
                         f"of video {video}: {value}"
                     )
 
