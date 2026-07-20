@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "influx"
 dynamic = ["version"]
-description = "InFlux: A Benchmark for Self-Calibration of Dynamic Intrinsics of Video Cameras"
+description = "InFlux and InFlux++: Real and Synthetic Data for Estimating Dynamic Camera Intrinsics"
 readme = "README.md"
 maintainers = [
     {name = "Erich Liang", email = "el1685@princeton.edu"}
@@ -44,8 +44,13 @@ dev = [
 
 [project.urls]
 Homepage = "https://influx.cs.princeton.edu/"
-Repository = "https://github.com/Princeton-VL/InFlux"
-Paper = ""  # You can remove this or add a valid URL
+Repository = "https://github.com/princeton-vl/InFlux"
+Documentation = "https://github.com/princeton-vl/InFlux/tree/main/docs"
+"InFlux++ Paper" = "https://arxiv.org/abs/2607.05389"
+"InFlux Paper" = "https://arxiv.org/abs/2510.23589"
+InFlux-Real = "https://huggingface.co/datasets/princeton-vl/InFlux-Real"
+InFlux-Synth = "https://huggingface.co/datasets/princeton-vl/InFlux-Synth"
+Leaderboard = "https://influx.cs.princeton.edu/leaderboard"
 
 [project.scripts]
 influx-generate-sample = "scripts.generate_sample_submission:main"
@@ -65,6 +70,7 @@ packages = ["influx", "scripts"]
 include = [
     "influx",
     "scripts",
+    "docs",
     "media",
     "README.md",
     "LICENSE_CODE.md"
