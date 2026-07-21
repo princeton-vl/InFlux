@@ -412,10 +412,9 @@ def main():
         required=True,
     )
     parser.add_argument(
-        "--method_name",
         "--method-name",
         dest="method_name",
-        help="Method name that will be displayed in the leaderboard",
+        help="Method name as it appears in JSON metadata",
         default='my_submission',
     )
     parser.add_argument(
