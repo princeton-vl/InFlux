@@ -5,7 +5,10 @@ import os
 os.environ.setdefault("HF_XET_HIGH_PERFORMANCE", "1")
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
 
-from extract_tiffs import extract_tiffs
+if __package__:
+    from .extract_tiffs import extract_tiffs
+else:
+    from extract_tiffs import extract_tiffs
 from huggingface_hub import snapshot_download
 from pathlib import Path
 from tqdm import tqdm
@@ -32,7 +35,36 @@ def download_dataset(local_dir=f"{REPO_ROOT}/influx_real_data", partitions=PARTI
     print(f"Dataset downloaded to {local_dir}")
 
 
-def main(args):
+def main(args=None):
+    if args is None:
+        parser = argparse.ArgumentParser(
+            description="Download the InFlux dataset and optionally extract frames."
+        )
+        parser.add_argument(
+            "--output-dir",
+            default=f"{REPO_ROOT}/influx_real_data",
+        )
+        parser.add_argument(
+            "--partitions",
+            nargs="+",
+            choices=["influx", "influx_pp_real"],
+            default=["influx", "influx_pp_real"],
+            metavar="PARTITION",
+            help="Partitions to download. Choices: influx, influx_pp_real. Defaults to both.",
+        )
+        parser.add_argument(
+            "--max-workers",
+            type=int,
+            default=8,
+            help="Number of concurrent Hugging Face file downloads. Default: 8.",
+        )
+        parser.add_argument(
+            "--extract-frames",
+            action="store_true",
+            help="Extract frames using extract_tiffs after downloading the dataset.",
+        )
+        args = parser.parse_args()
+
     output_dir = args.output_dir
     download_dataset(output_dir, args.partitions, max_workers=args.max_workers)
 
@@ -54,32 +86,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Download the InFlux dataset and optionally extract frames."
-    )
-    parser.add_argument(
-        "--output-dir",
-        default=f"{REPO_ROOT}/influx_real_data",
-    )
-    parser.add_argument(
-        "--partitions",
-        nargs="+",
-        choices=["influx", "influx_pp_real"],
-        default=["influx", "influx_pp_real"],
-        metavar="PARTITION",
-        help="Partitions to download. Choices: influx, influx_pp_real. Defaults to both.",
-    )
-    parser.add_argument(
-        "--max-workers",
-        type=int,
-        default=8,
-        help="Number of concurrent Hugging Face file downloads. Default: 8.",
-    )
-    parser.add_argument(
-        "--extract-frames",
-        action="store_true",
-        help="Extract frames using extract_tiffs after downloading the dataset.",
-    )
-    args = parser.parse_args()
-
-    main(args)
+    main()

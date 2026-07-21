@@ -34,8 +34,8 @@ The InFlux project provides a **unified real-world benchmark**, **synthetic trai
 
 | Work | Main contributions | Public releases |
 |---|---|---|
-| **[InFlux](https://proceedings.neurips.cc/paper_files/paper/2025/file/8a8eca190088852067b4e8cc1b907122-Paper-Datasets_and_Benchmarks_Track.pdf)** | <ul><li>Introduced the first real-world benchmark with per-frame ground truth camera intrinsics for videos with dynamic intrinsics</li><li>Extended Kalibr to improve calibration accuracy and robustness</li></ul> | <ul><li>The <code>influx/</code> partition of <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Real">InFlux-Real</a></li><li><a href="https://github.com/princeton-vl/InFlux/tree/main/third_party/kalibr">Kalibr extensions</a></li></ul> |
-| **[InFlux++](https://arxiv.org/abs/2607.05389)** | <ul><li>Introduced InFlux++ Real, expanding the diversity of real-world scenes, subject motion, and camera trajectories</li><li>Introduced InFlux++ Synth, which contains synthetic training videos with per-frame ground truth intrinsics, camera pose, and additional annotations</li></ul> | <ul><li>The <code>influx_pp_real/</code> partition of <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Real">InFlux-Real</a></li><li><a href="https://huggingface.co/datasets/princeton-vl/InFlux-Synth">InFlux-Synth</a></li><li><a href="https://github.com/princeton-vl/InFlux">InFlux-Synth data loader</a></li></ul> |
+| **[InFlux](https://proceedings.neurips.cc/paper_files/paper/2025/file/8a8eca190088852067b4e8cc1b907122-Paper-Datasets_and_Benchmarks_Track.pdf)** | <ul><li>Introduced the first real-world benchmark with per-frame ground truth camera intrinsics for videos with dynamic intrinsics</li><li>Extended Kalibr to improve calibration accuracy and robustness</li></ul> | <ul><li>The <code>influx/</code> partition of <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Real">InFlux-Real</a></li><li><a href="https://github.com/princeton-vl/InFlux/tree/main/third_party/kalibr">Kalibr extension</a></li></ul> |
+| **[InFlux++](https://arxiv.org/abs/2607.05389)** | <ul><li>Introduced InFlux++ Real, expanding the diversity of real-world scenes, subject motion, and camera trajectories</li><li>Introduced InFlux++ Synth, which contains synthetic training videos with per-frame ground truth intrinsics, camera pose, and additional annotations</li></ul> | <ul><li>The <code>influx_pp_real/</code> partition of <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Real">InFlux-Real</a></li><li><a href="https://huggingface.co/datasets/princeton-vl/InFlux-Synth">InFlux-Synth</a></li><li><a href="docs/README_dataloader.md">InFlux-Synth data loader</a></li></ul> |
 
 ## Publications and Citation
 
@@ -141,7 +141,7 @@ If you find our real-world benchmark, synthetic training data, or code useful, p
 
 ## Getting Started
 
-### Install the Repository Utilities
+### Basic Installation
 
 We recommend creating a dedicated Conda environment named `influx` with Python 3.11:
 
@@ -156,45 +156,55 @@ From the repository root, install the package in editable mode:
 pip install -e .
 ```
 
-This installs the Python dependencies and command-line utilities used for downloading data, extracting files, and submitting benchmark predictions. Dataset-specific requirements and commands are documented in the guides linked below.
+The base installation provides the command-line utilities for:
 
-[Download Overview](docs/README_download.md) ·
-[Evaluation and Submission](docs/README_evaluation.md)
+- Downloading and extracting InFlux-Real
+- Downloading and extracting selected InFlux-Synth partitions and modalities
+- Generating and uploading benchmark submissions
 
-### InFlux-Real — Real-World Benchmark
+The Kalibr extension and the InFlux-Synth data loader have separate setup and usage instructions below.
 
-[InFlux-Real](https://huggingface.co/datasets/princeton-vl/InFlux-Real) is the unified real-world benchmark release for the project. It contains **657,648 annotated frames from 720 high-resolution videos** across two benchmark partitions:
+For additional installation details, shared requirements, and an index of the available data-download workflows, see [Installation and Data Downloads](docs/README_download.md).
 
-- **`influx/`** contains the original InFlux benchmark.
-- **`influx_pp_real/`** contains InFlux++ Real, a real-world benchmark extension of InFlux.
+### Download InFlux-Real
+
+We provide utility scripts and instructions [here](docs/README_download_real.md) to download InFlux-Real and optionally decode its videos into per-frame `.tiff` images. InFlux-Real is the unified real-world benchmark release for the project. It combines:
+
+- **`influx/`**, the original InFlux benchmark
+- **`influx_pp_real/`**, InFlux++ Real, a real-world benchmark extension of InFlux
 
 Ground truth camera intrinsics are released for the validation splits. Ground truth for the test splits is withheld for evaluation through the submission server.
 
-See the dataset card, documentation, and live leaderboard linked below for download, extraction, annotation, evaluation, and submission information.
+**Related links:** [Dataset Card](https://huggingface.co/datasets/princeton-vl/InFlux-Real) · [Evaluation and Submission](docs/README_evaluation.md) · [Live Leaderboard](https://influx.cs.princeton.edu/leaderboard)
 
-[Dataset Card](https://huggingface.co/datasets/princeton-vl/InFlux-Real) ·
-[Download and Extraction](docs/README_download_real.md) ·
-[Evaluation and Submission](docs/README_evaluation.md) ·
-[Live Leaderboard](https://influx.cs.princeton.edu/leaderboard)
+### Download InFlux-Synth
 
-### InFlux-Synth — Synthetic Dataset
+We provide utility scripts and instructions [here](docs/README_download_synth.md) to download selected InFlux-Synth partitions and modalities and optionally extract them. InFlux-Synth is the synthetic dataset introduced as InFlux++ Synth and is intended primarily for training and finetuning dynamic camera intrinsics prediction models.
 
-[InFlux-Synth](https://huggingface.co/datasets/princeton-vl/InFlux-Synth) is the large-scale synthetic dataset introduced as InFlux++ Synth. It contains **441,840 annotated frames from 1,841 procedurally generated videos**.
+Every video includes per-frame ground truth camera intrinsics and camera pose. A subset of videos additionally include depth and surface normals.
 
-Every video includes per-frame ground truth camera intrinsics and camera pose. Selected scenes additionally include depth and surface normals. The released RGB images are undistorted, and the official data loader supports applying lens distortion during training as data augmentation.
+**Related links:** [Dataset Card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth) · [InFlux-Synth Data Loader](docs/README_dataloader.md)
 
-InFlux-Synth is intended primarily for training and finetuning models before real-world validation and evaluation on InFlux-Real.
+### Use the Kalibr Extension
 
-See the dataset card and documentation linked below for download, extraction, annotation, and data-loading information.
+The original InFlux work includes an extension to Kalibr for more accurate and robust camera calibration on the real-world benchmark.
 
-[Dataset Card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth) ·
-[Download and Extraction](docs/README_download_synth.md) ·
-[Data Loader](docs/README_dataloader.md)
+Setup and usage instructions are available [here](third_party/kalibr/).
 
-Detailed dataset structures, annotation schemas, coordinate conventions, and storage requirements are maintained in the corresponding Hugging Face dataset cards.
+The release contains the modified Kalibr source used by the InFlux calibration pipeline.
+
+### Use the InFlux-Synth Data Loader
+
+The InFlux++ work includes an InFlux-Synth data loader for loading RGB frames with their corresponding camera intrinsics, camera pose, and lens metadata.
+
+Setup and usage instructions are available [here](docs/README_dataloader.md).
+
+The data loader also supports applying lens distortion to the released undistorted RGB images as data augmentation during training.
+
+The Hugging Face dataset cards are the authoritative references for dataset structures, annotation schemas, coordinate conventions, and storage requirements.
 
 ## Contact
 
-For questions about the data, real-world benchmark, or evaluation server, contact:
+For questions about the data, code, real-world benchmark, or evaluation server, contact:
 
 `influxbenchmark@gmail.com`

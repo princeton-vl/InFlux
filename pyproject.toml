@@ -11,7 +11,7 @@ maintainers = [
     {name = "Erich Liang", email = "el1685@princeton.edu"}
 ]
 license = {file = "LICENSE_CODE.md"}
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "requests",
     "requests-toolbelt",
@@ -53,6 +53,8 @@ InFlux-Synth = "https://huggingface.co/datasets/princeton-vl/InFlux-Synth"
 Leaderboard = "https://influx.cs.princeton.edu/leaderboard"
 
 [project.scripts]
+influx-download-real = "scripts.download_influx_real:main"
+influx-download-synth = "scripts.download_influx_synth:main"
 influx-generate-sample = "scripts.generate_sample_submission:main"
 influx-upload = "scripts.upload_submission:main"
 influx-make-public = "scripts.make_submission_public:main"

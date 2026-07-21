@@ -5,7 +5,10 @@ import shutil
 os.environ.setdefault("HF_XET_HIGH_PERFORMANCE", "1")
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
 
-from extract_files import extract_files
+if __package__:
+    from .extract_files import extract_files
+else:
+    from extract_files import extract_files
 from huggingface_hub import snapshot_download
 from pathlib import Path
 
@@ -85,7 +88,49 @@ def download_dataset(local_dir=f"{REPO_ROOT}/influx_synth_data", partitions=PART
     print(f"Dataset downloaded to {local_dir}")
 
 
-def main(args):
+def main(args=None):
+    if args is None:
+        parser = argparse.ArgumentParser(
+            description="Download the InFlux-Synth dataset from Hugging Face Hub."
+        )
+        parser.add_argument(
+            "--output-dir",
+            default=f"{REPO_ROOT}/influx_synth_data",
+        )
+        parser.add_argument(
+            "--partitions",
+            nargs="+",
+            choices=["indoors", "indoors_full", "nature", "nature_full"],
+            default=["indoors", "indoors_full", "nature", "nature_full"],
+            metavar="PARTITION",
+            help="Partitions to download. Choices: indoors, indoors_full, nature, nature_full. Defaults to all four.",
+        )
+        parser.add_argument(
+            "--include",
+            nargs="*",
+            choices=["depth", "depth_sharp", "surface_normals", "surface_normals_sharp"],
+            default=[],
+            metavar="EXTRA",
+            help="Optional full-split extras: depth, depth_sharp, surface_normals, surface_normals_sharp. Defaults to none.",
+        )
+        parser.add_argument(
+            "--max-workers",
+            type=int,
+            default=8,
+            help="Number of concurrent Hugging Face file downloads. Default: 8.",
+        )
+        parser.add_argument(
+            "--sample",
+            action="store_true",
+            help="Download only a small sample from each split.",
+        )
+        parser.add_argument(
+            "--extract",
+            action="store_true",
+            help="Extract archives after download (Image/camview for all splits; depth/normals for *_full).",
+        )
+        args = parser.parse_args()
+
     output_dir = args.output_dir
     download_dataset(output_dir, args.partitions, args.include, max_workers=args.max_workers, sample=args.sample)
 
@@ -124,45 +169,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Download the InFlux-Synth dataset from Hugging Face Hub."
-    )
-    parser.add_argument(
-        "--output-dir",
-        default=f"{REPO_ROOT}/influx_synth_data",
-    )
-    parser.add_argument(
-        "--partitions",
-        nargs="+",
-        choices=["indoors", "indoors_full", "nature", "nature_full"],
-        default=["indoors", "indoors_full", "nature", "nature_full"],
-        metavar="PARTITION",
-        help="Partitions to download. Choices: indoors, indoors_full, nature, nature_full. Defaults to all four.",
-    )
-    parser.add_argument(
-        "--include",
-        nargs="*",
-        choices=["depth", "depth_sharp", "surface_normals", "surface_normals_sharp"],
-        default=[],
-        metavar="EXTRA",
-        help="Optional full-split extras: depth, depth_sharp, surface_normals, surface_normals_sharp. Defaults to none.",
-    )
-    parser.add_argument(
-        "--max-workers",
-        type=int,
-        default=8,
-        help="Number of concurrent Hugging Face file downloads. Default: 8.",
-    )
-    parser.add_argument(
-        "--sample",
-        action="store_true",
-        help="Download only a small sample from each split.",
-    )
-    parser.add_argument(
-        "--extract",
-        action="store_true",
-        help="Extract archives after download (Image/camview for all splits; depth/normals for *_full).",
-    )
-    args = parser.parse_args()
-
-    main(args)
+    main()

@@ -6,8 +6,14 @@ import tempfile
 
 
 CVDPACK_MKV_ARCHIVES = {
-    os.path.join("SurfaceNormal", "SurfaceNormal_1_0.mkv"),
-    os.path.join("SurfaceNormalSharp", "SurfaceNormalSharp_1_0.mkv"),
+    os.path.join(
+        "SurfaceNormal",
+        "SurfaceNormal_1_0.mkv",
+    ): "surface_normal",
+    os.path.join(
+        "SurfaceNormalSharp",
+        "SurfaceNormalSharp_1_0.mkv",
+    ): "surface_normal_sharp",
 }
 
 
@@ -24,9 +30,17 @@ def extract_files(scene_dir, split_dir, config_path, tmp_dir, remove_archives=Tr
         _extract_tar(archive, remove_archive=remove_archives)
 
     if mkv_archives:
-        _unpack_scene_mkvs(scene, split_dir, config_path, tmp_dir)
+        for _, gt_type in mkv_archives:
+            _unpack_scene_mkv(
+                scene,
+                gt_type,
+                split_dir,
+                config_path,
+                tmp_dir,
+            )
+
         if remove_archives:
-            for archive in mkv_archives:
+            for archive, _ in mkv_archives:
                 os.remove(archive)
                 print(f"Removed archive: {archive}")
 
@@ -34,18 +48,30 @@ def extract_files(scene_dir, split_dir, config_path, tmp_dir, remove_archives=Tr
 def _find_archives(scene_dir):
     tar_archives = []
     mkv_archives = []
+
     for root, _, files in os.walk(scene_dir):
         for name in sorted(files):
             path = os.path.join(root, name)
+            relative_path = os.path.relpath(path, scene_dir)
+
             if name.endswith(".tar.gz"):
                 tar_archives.append(path)
-            elif os.path.relpath(path, scene_dir) in CVDPACK_MKV_ARCHIVES:
-                mkv_archives.append(path)
+            elif relative_path in CVDPACK_MKV_ARCHIVES:
+                mkv_archives.append(
+                    (
+                        path,
+                        CVDPACK_MKV_ARCHIVES[relative_path],
+                    )
+                )
+
     return tar_archives, mkv_archives
 
 
-def _unpack_scene_mkvs(scene, split_dir, config_path, tmp_dir):
-    scene_tmp_dir = tempfile.mkdtemp(prefix=f"{scene}_", dir=tmp_dir)
+def _unpack_scene_mkv(scene, gt_type, split_dir, config_path, tmp_dir):
+    scene_tmp_dir = tempfile.mkdtemp(
+        prefix=f"{scene}_{gt_type}_",
+        dir=tmp_dir,
+    )
     cmd = [
         "cvdpack",
         "unpack",
@@ -59,11 +85,16 @@ def _unpack_scene_mkvs(scene, split_dir, config_path, tmp_dir):
         scene_tmp_dir,
         "--subset",
         f"scene={scene}",
+        f"gt_type={gt_type}",
     ]
 
     process_succeeded = False
     try:
-        print(f"Extracting MKV archives with cvdpack for {scene} (tmp: {scene_tmp_dir})...", flush=True)
+        print(
+            f"Extracting {gt_type} MKV archive with cvdpack "
+            f"for {scene} (tmp: {scene_tmp_dir})...",
+            flush=True,
+        )
         subprocess.run(cmd, check=True)
         process_succeeded = True
     except FileNotFoundError as e:
@@ -72,7 +103,8 @@ def _unpack_scene_mkvs(scene, split_dir, config_path, tmp_dir):
         ) from e
     except subprocess.CalledProcessError as e:
         raise RuntimeError(
-            f"cvdpack unpack failed for {scene} (exit code {e.returncode})"
+            f"cvdpack unpack failed for {scene}/{gt_type} "
+            f"(exit code {e.returncode})"
         ) from e
     finally:
         try:
@@ -82,11 +114,12 @@ def _unpack_scene_mkvs(scene, split_dir, config_path, tmp_dir):
         except OSError as e:
             if process_succeeded:
                 raise RuntimeError(
-                    f"Failed to clean temporary directory for {scene}: {scene_tmp_dir}"
+                    f"Failed to clean temporary directory for "
+                    f"{scene}/{gt_type}: {scene_tmp_dir}"
                 ) from e
             print(
-                f"Warning: failed to clean temporary directory for {scene}: "
-                f"{scene_tmp_dir}: {e}"
+                f"Warning: failed to clean temporary directory for "
+                f"{scene}/{gt_type}: {scene_tmp_dir}: {e}"
             )
 
 
