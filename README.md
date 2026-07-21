@@ -48,7 +48,7 @@ If you find our real-world benchmark, synthetic training data, or code useful, p
 <p align="center">
   <a href="https://erichliang.github.io/">Erich Liang</a>
   ·
-  <a href="https://www.linkedin.com/in/zh1kang">Caleb Kha-Uong<sup>*</sup></a>
+  <a href="http://zh1kang.com/">Caleb Kha-Uong<sup>*</sup></a>
   ·
   <a href="https://www.linkedin.com/in/chinmaya-saran">Chinmaya Saran<sup>*</sup></a>
   ·
