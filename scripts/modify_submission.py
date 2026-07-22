@@ -7,6 +7,7 @@ import argparse
 import getpass
 import sys
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 
@@ -63,6 +64,55 @@ def checked_post(
             f"HTTP {response.status_code}: {payload.get('error', payload)}"
         )
     return payload
+
+
+def validate_optional_http_url(
+    value: str | None,
+    *,
+    option_name: str,
+) -> None:
+    """Validate an optional public link before requesting email verification."""
+
+    if value is None or value == "":
+        return
+
+    if value != value.strip():
+        raise ModifySubmissionError(
+            f"{option_name} contains leading or trailing whitespace. "
+            "Remove the whitespace and try again. No verification email was requested."
+        )
+
+    if any(character.isspace() or ord(character) < 32 for character in value):
+        raise ModifySubmissionError(
+            f"{option_name} must not contain whitespace or control characters. "
+            "No verification email was requested."
+        )
+
+    parsed = urlsplit(value)
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"} or not parsed.netloc:
+        if not parsed.scheme:
+            example = f"https://{value.lstrip('/')}"
+            raise ModifySubmissionError(
+                f"{option_name} must be an absolute http or https URL. "
+                f"Received {value!r}. Add an explicit scheme, for example "
+                f"{example!r}. No verification email was requested."
+            )
+        raise ModifySubmissionError(
+            f"{option_name} must be an absolute http or https URL with a host. "
+            f"Received {value!r}. No verification email was requested."
+        )
+
+
+def validate_metadata_urls(args: argparse.Namespace) -> None:
+    validate_optional_http_url(
+        args.url_publication,
+        option_name="--url-publication",
+    )
+    validate_optional_http_url(
+        args.url_code,
+        option_name="--url-code",
+    )
 
 
 def build_modification_data(args: argparse.Namespace) -> dict[str, Any]:
@@ -128,7 +178,17 @@ def main() -> int:
         default=None,
         help="Six-digit verification code; omitted means prompt securely.",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help=(
+            "Show diagnostic details such as the short-lived modification "
+            "challenge ID."
+        ),
+    )
     args = parser.parse_args()
+
+    validate_metadata_urls(args)
 
     modification_data = build_modification_data(args)
     if not modification_data:
@@ -171,7 +231,8 @@ def main() -> int:
             "The website did not return a modification challenge ID."
         )
     print(challenge.get("message", "Verification code requested."))
-    print(f"Challenge ID: {challenge_id}")
+    if args.verbose:
+        print(f"Challenge ID: {challenge_id}")
 
     code = args.code
     if code is None:

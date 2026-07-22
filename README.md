@@ -150,40 +150,63 @@ conda create --name influx python=3.11
 conda activate influx
 ```
 
-From the repository root, install the package in editable mode:
+From the repository root, install the dependencies:
 
 ```bash
+conda install -c conda-forge ffmpeg
 pip install -e .
 ```
 
-The base installation provides the command-line utilities for:
+The base installation provides the Python dependencies and command-line utilities for:
 
 - Downloading and extracting InFlux-Real
 - Downloading and extracting selected InFlux-Synth partitions and modalities
 - Generating and uploading benchmark submissions
 
-The Kalibr extension and the InFlux-Synth data loader have separate setup and usage instructions below.
+The InFlux-Synth data loader, Kalibr extension, and InFlux utility scripts have separate setup and usage instructions below.
 
-For additional installation details, shared requirements, and an index of the available data-download workflows, see [Installation and Data Downloads](docs/README_download.md).
+For shared installation details and an index of the available tools and downloads, see [Installation and Data Downloads](docs/README_download.md).
 
 ### Download InFlux-Real
 
-We provide utility scripts and instructions [here](docs/README_download_real.md) to download InFlux-Real and optionally decode its videos into per-frame `.tiff` images. InFlux-Real is the unified real-world benchmark release for the project. It combines:
+We provide utility scripts and instructions [here](docs/README_download_real.md) to download InFlux-Real and optionally decode its videos into per-frame `.tiff` images.
+
+InFlux-Real is the unified real-world benchmark release for the project. It combines:
 
 - **`influx/`**, the original InFlux benchmark
 - **`influx_pp_real/`**, InFlux++ Real, a real-world benchmark extension of InFlux
 
 Ground truth camera intrinsics are released for the validation splits. Ground truth for the test splits is withheld for evaluation through the submission server.
 
-**Related links:** [Dataset Card](https://huggingface.co/datasets/princeton-vl/InFlux-Real) · [Evaluation and Submission](docs/README_evaluation.md) · [Live Leaderboard](https://influx.cs.princeton.edu/leaderboard)
+For benchmark statistics, file structure, and the ground truth annotation schema, see the [InFlux-Real dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Real).
+
+**Related links:** [Submit and Evaluate Results](docs/README_evaluation.md) · [Live Leaderboard](https://influx.cs.princeton.edu/leaderboard)
 
 ### Download InFlux-Synth
 
-We provide utility scripts and instructions [here](docs/README_download_synth.md) to download selected InFlux-Synth partitions and modalities and optionally extract them. InFlux-Synth is the synthetic dataset introduced as InFlux++ Synth and is intended primarily for training and finetuning dynamic camera intrinsics prediction models.
+We provide utility scripts and instructions [here](docs/README_download_synth.md) to download selected InFlux-Synth partitions and modalities and optionally extract them.
 
-Every video includes per-frame ground truth camera intrinsics and camera pose. A subset of videos additionally include depth and surface normals.
+InFlux-Synth houses the synthetic dataset introduced as InFlux++ Synth and is intended primarily for training and finetuning dynamic camera intrinsics prediction models. Every video includes per-frame ground truth camera intrinsics and camera pose. A subset of videos additionally includes depth and surface normals.
 
-**Related links:** [Dataset Card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth) · [InFlux-Synth Data Loader](docs/README_dataloader.md)
+For dataset statistics, file structure, and details about ground truth modalities and formats, see the [InFlux-Synth dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth).
+
+**Related link:** [InFlux-Synth Data Loader](docs/README_dataloader.md)
+
+### Submit and Evaluate Results
+
+We provide submission utilities and instructions [here](docs/README_evaluation.md) for validating and uploading predictions to the InFlux evaluation server.
+
+Submissions may target the original InFlux test split, the InFlux++ Real test split, or both real-world benchmark test splits. Evaluation results are returned by email, and public results are displayed on the live leaderboard.
+
+**Related link:** [Live Leaderboard](https://influx.cs.princeton.edu/leaderboard)
+
+### Use the InFlux-Synth Data Loader
+
+The InFlux++ work includes an InFlux-Synth data loader for loading RGB frames with their corresponding camera intrinsics, camera pose, and lens metadata.
+
+Setup and usage instructions are available [here](docs/README_dataloader.md).
+
+The data loader also supports applying lens distortion to the released undistorted RGB images, along with other forms of data augmentation that may be useful during training.
 
 ### Use the Kalibr Extension
 
@@ -193,15 +216,11 @@ Setup and usage instructions are available [here](third_party/kalibr/).
 
 The release contains the modified Kalibr source used by the InFlux calibration pipeline.
 
-### Use the InFlux-Synth Data Loader
+### Use the InFlux Utility Scripts
 
-The InFlux++ work includes an InFlux-Synth data loader for loading RGB frames with their corresponding camera intrinsics, camera pose, and lens metadata.
+The original InFlux release includes utility scripts used to develop the real-world benchmark and its calibration lookup tables.
 
-Setup and usage instructions are available [here](docs/README_dataloader.md).
-
-The data loader also supports applying lens distortion to the released undistorted RGB images as data augmentation during training.
-
-The Hugging Face dataset cards are the authoritative references for dataset structures, annotation schemas, coordinate conventions, and storage requirements.
+Setup instructions and an index of the component-specific documentation are available [here](influx/README.md).
 
 ## Contact
 
