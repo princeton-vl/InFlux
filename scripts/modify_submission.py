@@ -5,22 +5,32 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import html
+import re
 import sys
 from typing import Any
 from urllib.parse import urlsplit
+from uuid import UUID
 
 import requests
 
 
 DEFAULT_WEBSITE = "https://influx.cs.princeton.edu"
 REQUEST_TIMEOUT_SECONDS = 60
+MAX_ERROR_DETAIL_CHARS = 240
 
 
 class ModifySubmissionError(RuntimeError):
-    pass
+    """Expected, user-facing failure from the modification client."""
 
 
 CSRF_COOKIE_NAMES = ("csrftoken", "influx_dev_csrftoken")
+
+
+STAGE_BOOTSTRAP = "bootstrap"
+STAGE_REQUEST = "request_challenge"
+STAGE_VERIFY = "verify_challenge"
+STAGE_UPDATE = "apply_update"
 
 
 def csrf_token_from_session(session: requests.Session) -> str | None:
@@ -32,36 +42,212 @@ def csrf_token_from_session(session: requests.Session) -> str | None:
     return None
 
 
-def response_json(response: requests.Response) -> dict[str, Any]:
+def compact_response_text(value: str, *, limit: int = MAX_ERROR_DETAIL_CHARS) -> str:
+    """Turn an HTML/plain response body into a bounded one-line diagnostic."""
+
+    text = html.unescape(value or "")
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = " ".join(text.split())
+    if len(text) > limit:
+        return text[: limit - 1].rstrip() + "…"
+    return text
+
+
+def response_json_or_none(response: requests.Response) -> dict[str, Any] | None:
     try:
         payload = response.json()
-    except ValueError as exc:
+    except ValueError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def server_error_detail(response: requests.Response) -> str | None:
+    payload = response_json_or_none(response)
+    if payload is not None:
+        error = payload.get("error")
+        if isinstance(error, str) and error.strip():
+            return error.strip()
+        message = payload.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+
+    detail = compact_response_text(response.text)
+    return detail or None
+
+
+def stage_label(stage: str) -> str:
+    return {
+        STAGE_BOOTSTRAP: "loading the InFlux submission page",
+        STAGE_REQUEST: "requesting modification verification",
+        STAGE_VERIFY: "verifying the modification code",
+        STAGE_UPDATE: "applying the submission update",
+    }.get(stage, "contacting InFlux")
+
+
+def friendly_http_error(
+    response: requests.Response,
+    *,
+    stage: str,
+    website: str,
+    submission_id: str | None = None,
+) -> ModifySubmissionError:
+    """Translate HTTP/API failures without dumping an HTML error page."""
+
+    status = int(response.status_code)
+    detail = server_error_detail(response)
+    identifier = submission_id or "the requested submission"
+
+    if status == 400:
+        message = "The server rejected the request."
+    elif status == 401:
+        message = "The modification service rejected authentication."
+    elif status == 403:
+        if stage == STAGE_REQUEST:
+            message = (
+                "The server would not start ownership verification. Confirm that "
+                "--email exactly matches the original submitter email."
+            )
+        elif stage == STAGE_VERIFY:
+            message = (
+                "The verification code was not accepted. Check the six-digit code "
+                "and request a new challenge if it has expired."
+            )
+        else:
+            message = (
+                "The verified modification session is no longer authorized. Rerun "
+                "the command to request a new verification code."
+            )
+    elif status == 404:
+        if stage == STAGE_BOOTSTRAP:
+            message = (
+                f"The InFlux submission page was not found at {website!r}. Check "
+                "--website and make sure it points to the site root."
+            )
+        elif stage == STAGE_REQUEST:
+            message = (
+                f"Submission {identifier} was not found at {website}. Check the UUID "
+                "and --website. The live record may also have been removed during an "
+                "administrative or test-data reset."
+            )
+        elif stage == STAGE_VERIFY:
+            message = (
+                "The short-lived modification challenge was not found or is no longer "
+                "valid. Rerun the command to request a new verification code."
+            )
+        else:
+            message = (
+                f"Submission {identifier} was no longer available when the update was "
+                "applied. Check the UUID and rerun ownership verification."
+            )
+    elif status == 409:
+        message = (
+            "The submission is not currently in a modifiable state. Publication "
+            "metadata can normally be changed only after evaluation is finalized."
+        )
+    elif status == 410:
+        message = (
+            "The verification challenge has expired. Rerun the command to request a "
+            "new code."
+        )
+    elif status == 429:
+        message = (
+            "Too many verification attempts or requests were made. Wait briefly, then "
+            "rerun the command to request a new challenge."
+        )
+    elif status >= 500:
+        message = (
+            "The InFlux service encountered a temporary server-side problem while "
+            f"{stage_label(stage)}. No local retry was attempted."
+        )
+    else:
+        message = (
+            f"The server returned HTTP {status} while {stage_label(stage)}."
+        )
+
+    if detail and detail.casefold() not in message.casefold():
+        message += f" Server detail: {detail}"
+
+    return ModifySubmissionError(message)
+
+
+def request_with_friendly_errors(
+    session: requests.Session,
+    method: str,
+    url: str,
+    *,
+    stage: str,
+    website: str,
+    submission_id: str | None = None,
+    data: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+) -> requests.Response:
+    try:
+        response = session.request(
+            method,
+            url,
+            data=data,
+            headers=headers,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+    except requests.Timeout as exc:
         raise ModifySubmissionError(
-            f"Server returned HTTP {response.status_code} with non-JSON data: "
-            f"{response.text[:500]}"
+            f"Timed out after {REQUEST_TIMEOUT_SECONDS} seconds while "
+            f"{stage_label(stage)}. Check connectivity and retry; no update was "
+            "confirmed by this client."
         ) from exc
-    if not isinstance(payload, dict):
-        raise ModifySubmissionError("Server returned a non-object JSON response.")
-    return payload
+    except requests.exceptions.SSLError as exc:
+        raise ModifySubmissionError(
+            f"TLS certificate verification failed while {stage_label(stage)}. "
+            "Check the --website URL and local certificate configuration."
+        ) from exc
+    except requests.ConnectionError as exc:
+        raise ModifySubmissionError(
+            f"Could not connect to {website!r} while {stage_label(stage)}. Check "
+            "network access, DNS, and --website."
+        ) from exc
+    except requests.RequestException as exc:
+        raise ModifySubmissionError(
+            f"Network request failed while {stage_label(stage)}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+    if response.status_code >= 400:
+        raise friendly_http_error(
+            response,
+            stage=stage,
+            website=website,
+            submission_id=submission_id,
+        )
+    return response
 
 
-def checked_post(
+def checked_json_post(
     session: requests.Session,
     url: str,
     *,
     data: dict[str, Any],
     headers: dict[str, str],
+    stage: str,
+    website: str,
+    submission_id: str,
 ) -> dict[str, Any]:
-    response = session.post(
+    response = request_with_friendly_errors(
+        session,
+        "POST",
         url,
+        stage=stage,
+        website=website,
+        submission_id=submission_id,
         data=data,
         headers=headers,
-        timeout=REQUEST_TIMEOUT_SECONDS,
     )
-    payload = response_json(response)
-    if response.status_code >= 400:
+    payload = response_json_or_none(response)
+    if payload is None:
+        detail = compact_response_text(response.text)
+        suffix = f" Response summary: {detail}" if detail else ""
         raise ModifySubmissionError(
-            f"HTTP {response.status_code}: {payload.get('error', payload)}"
+            f"The server returned an unexpected non-JSON success response while "
+            f"{stage_label(stage)}.{suffix}"
         )
     return payload
 
@@ -103,8 +289,101 @@ def validate_optional_http_url(
             f"Received {value!r}. No verification email was requested."
         )
 
+    if parsed.username or parsed.password:
+        raise ModifySubmissionError(
+            f"{option_name} must not embed a username or password. "
+            "No verification email was requested."
+        )
 
-def validate_metadata_urls(args: argparse.Namespace) -> None:
+
+def validate_website(value: str) -> str:
+    if value != value.strip():
+        raise ModifySubmissionError("--website contains leading or trailing whitespace.")
+    parsed = urlsplit(value)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise ModifySubmissionError(
+            "--website must be an absolute http or https URL, for example "
+            f"{DEFAULT_WEBSITE!r}."
+        )
+    if parsed.username or parsed.password:
+        raise ModifySubmissionError("--website must not embed credentials.")
+    if parsed.query or parsed.fragment:
+        raise ModifySubmissionError("--website must not contain a query string or fragment.")
+    path = parsed.path.rstrip("/")
+    if path:
+        raise ModifySubmissionError(
+            "--website must point to the site root, without an endpoint path. "
+            f"Received path {parsed.path!r}."
+        )
+    return value.rstrip("/")
+
+
+def validate_submission_id(value: str) -> str:
+    try:
+        parsed = UUID(value)
+    except (ValueError, AttributeError) as exc:
+        raise ModifySubmissionError(
+            f"--id must be a valid submission UUID. Received {value!r}. "
+            "No verification email was requested."
+        ) from exc
+    return str(parsed)
+
+
+def validate_email_address(value: str) -> str:
+    if value != value.strip():
+        raise ModifySubmissionError(
+            "--email contains leading or trailing whitespace. "
+            "No verification email was requested."
+        )
+    if any(character.isspace() or ord(character) < 32 for character in value):
+        raise ModifySubmissionError(
+            "--email must not contain whitespace or control characters. "
+            "No verification email was requested."
+        )
+    if value.count("@") != 1:
+        raise ModifySubmissionError(
+            f"--email must be a valid address. Received {value!r}. "
+            "No verification email was requested."
+        )
+    local, domain = value.rsplit("@", 1)
+    if not local or not domain or domain.startswith(".") or domain.endswith("."):
+        raise ModifySubmissionError(
+            f"--email must be a valid address. Received {value!r}. "
+            "No verification email was requested."
+        )
+    return value
+
+
+def validate_optional_display_text(
+    value: str | None,
+    *,
+    option_name: str,
+    maximum_length: int,
+) -> None:
+    if value is None:
+        return
+    if len(value) > maximum_length:
+        raise ModifySubmissionError(
+            f"{option_name} is {len(value)} characters long; the maximum is "
+            f"{maximum_length}. No verification email was requested."
+        )
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise ModifySubmissionError(
+            f"{option_name} must not contain control characters or newlines. "
+            "No verification email was requested."
+        )
+
+
+def validate_verification_code(value: str) -> str:
+    if not re.fullmatch(r"\d{6}", value):
+        raise ModifySubmissionError(
+            "Verification code must contain exactly six digits. Rerun the command "
+            "and enter the code from the newest modification email."
+        )
+    return value
+
+
+def validate_metadata(args: argparse.Namespace) -> None:
     validate_optional_http_url(
         args.url_publication,
         option_name="--url-publication",
@@ -112,6 +391,16 @@ def validate_metadata_urls(args: argparse.Namespace) -> None:
     validate_optional_http_url(
         args.url_code,
         option_name="--url-code",
+    )
+    validate_optional_display_text(
+        args.method_name,
+        option_name="--method-name",
+        maximum_length=100,
+    )
+    validate_optional_display_text(
+        args.publication,
+        option_name="--publication",
+        maximum_length=200,
     )
 
 
@@ -182,13 +471,18 @@ def main() -> int:
         "--verbose",
         action="store_true",
         help=(
-            "Show diagnostic details such as the short-lived modification "
-            "challenge ID."
+            "Show diagnostic details such as endpoint stages and the "
+            "short-lived modification challenge ID."
         ),
     )
     args = parser.parse_args()
 
-    validate_metadata_urls(args)
+    args.id = validate_submission_id(args.id)
+    args.email = validate_email_address(args.email)
+    website = validate_website(args.website)
+    validate_metadata(args)
+    if args.code is not None:
+        args.code = validate_verification_code(args.code.strip())
 
     modification_data = build_modification_data(args)
     if not modification_data:
@@ -196,21 +490,31 @@ def main() -> int:
             "Specify at least one metadata option, --publish, or --hide."
         )
 
-    website = args.website.rstrip("/")
     session = requests.Session()
 
-    bootstrap = session.get(
+    if args.verbose:
+        print(f"Website: {website}")
+        print(f"Submission ID: {args.id}")
+        print("Stage: bootstrap CSRF session")
+
+    bootstrap = request_with_friendly_errors(
+        session,
+        "GET",
         f"{website}/request_submit/",
-        timeout=REQUEST_TIMEOUT_SECONDS,
+        stage=STAGE_BOOTSTRAP,
+        website=website,
+        submission_id=args.id,
     )
-    bootstrap.raise_for_status()
+    del bootstrap
+
     csrf_token = csrf_token_from_session(session)
     if not csrf_token:
         observed = sorted({cookie.name for cookie in session.cookies})
         observed_text = ", ".join(observed) if observed else "none"
         raise ModifySubmissionError(
             "The website did not set a recognized CSRF cookie. "
-            f"Expected one of {CSRF_COOKIE_NAMES!r}; observed: {observed_text}."
+            f"Expected one of {CSRF_COOKIE_NAMES!r}; observed: {observed_text}. "
+            "Check --website and whether the site is under maintenance."
         )
 
     headers = {
@@ -219,38 +523,61 @@ def main() -> int:
         "Accept": "application/json",
     }
 
-    challenge = checked_post(
+    if args.verbose:
+        print("Stage: request ownership-verification email")
+
+    challenge = checked_json_post(
         session,
         f"{website}/request_modify/{args.id}/",
         data={"email": args.email},
         headers=headers,
+        stage=STAGE_REQUEST,
+        website=website,
+        submission_id=args.id,
     )
     challenge_id = str(challenge.get("challenge_id") or "")
-    if not challenge_id:
+    try:
+        challenge_id = str(UUID(challenge_id))
+    except (ValueError, AttributeError) as exc:
         raise ModifySubmissionError(
-            "The website did not return a modification challenge ID."
-        )
+            "The website did not return a valid modification challenge ID."
+        ) from exc
+
     print(challenge.get("message", "Verification code requested."))
     if args.verbose:
         print(f"Challenge ID: {challenge_id}")
 
     code = args.code
     if code is None:
-        code = getpass.getpass("Verification code: ").strip()
+        code = validate_verification_code(
+            getpass.getpass("Verification code: ").strip()
+        )
 
-    verified = checked_post(
+    if args.verbose:
+        print("Stage: verify ownership code")
+
+    verified = checked_json_post(
         session,
         f"{website}/verify_modify/{challenge_id}/",
         data={"code": code},
         headers=headers,
+        stage=STAGE_VERIFY,
+        website=website,
+        submission_id=args.id,
     )
     print(verified.get("message", "Modification verification successful."))
 
-    updated = checked_post(
+    if args.verbose:
+        print("Stage: apply metadata/visibility update")
+
+    updated = checked_json_post(
         session,
         f"{website}/modify/{args.id}/",
         data=modification_data,
         headers=headers,
+        stage=STAGE_UPDATE,
+        website=website,
+        submission_id=args.id,
     )
     print(updated.get("message", "Submission result metadata updated."))
     print(f"Submission ID: {updated.get('submission_id', args.id)}")
