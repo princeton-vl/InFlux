@@ -31,9 +31,20 @@ The base installation provides the Python dependencies and command-line utilitie
 
 - Downloading InFlux-Real and InFlux-Synth
 - Extracting the downloaded data
-- Generating and uploading benchmark submissions
+- Generating, uploading, and managing benchmark submissions
 
 FFmpeg is used when decoding InFlux-Real videos into TIFF frames and when decoding InFlux-Synth surface normal containers.
+
+Confirm that the primary commands are available:
+
+```bash
+influx-download-real --help
+influx-download-synth --help
+influx-verify-real --help
+influx-verify-synth --help
+influx-generate-sample --help
+influx-upload --help
+```
 
 ## Additional Installations and Downloads
 
@@ -41,7 +52,7 @@ FFmpeg is used when decoding InFlux-Real videos into TIFF frames and when decodi
 |---|---|---|
 | Download InFlux-Real | Download either real-world benchmark partition or the complete release, with optional MP4-to-TIFF decoding | [Download and Extract InFlux-Real](README_download_real.md) |
 | Download InFlux-Synth | Select dataset partitions and modalities, download samples or complete partitions, and optionally extract the data | [Download and Extract InFlux-Synth](README_download_synth.md) |
-| Submit and evaluate predictions | Validate and upload test-set predictions and receive benchmark results | [Submit and Evaluate Results](README_evaluation.md) |
+| Submit and evaluate predictions | Generate submission templates, validate and upload predictions, receive results, and manage how evaluated results appear on the leaderboard | [Submit and Evaluate Results](README_evaluation.md) |
 | Use the InFlux-Synth data loader | Load RGB images and camera metadata and apply lens distortion and other data augmentations | [InFlux-Synth Data Loader](README_dataloader.md) |
 | Use the Kalibr extension | Build and use the modified Kalibr release from the original InFlux work | [Kalibr Extension](../third_party/kalibr/) |
 | Use the InFlux utility scripts | Install and use the scripts that supported development of the real-world benchmark and calibration lookup tables | [InFlux Utility Scripts](../influx/README.md) |

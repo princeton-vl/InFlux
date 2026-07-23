@@ -55,9 +55,13 @@ Leaderboard = "https://influx.cs.princeton.edu/leaderboard"
 [project.scripts]
 influx-download-real = "scripts.download_influx_real:main"
 influx-download-synth = "scripts.download_influx_synth:main"
+influx-verify-real = "scripts.verify_influx_real:main"
+influx-verify-synth = "scripts.verify_influx_synth:main"
 influx-generate-sample = "scripts.generate_sample_submission:main"
 influx-upload = "scripts.upload_submission:main"
-influx-make-public = "scripts.make_submission_public:main"
+influx-modify-submission = "scripts.modify_submission:main"
+influx-publish-submission = "scripts.modify_submission:publish_main"
+influx-hide-submission = "scripts.modify_submission:hide_main"
 
 [tool.hatch.version]
 source = "vcs"

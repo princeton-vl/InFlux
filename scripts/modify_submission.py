@@ -18,6 +18,8 @@ import requests
 DEFAULT_WEBSITE = "https://influx.cs.princeton.edu"
 REQUEST_TIMEOUT_SECONDS = 60
 MAX_ERROR_DETAIL_CHARS = 240
+SUPPORT_EMAIL = "influxbenchmark@gmail.com"
+LEADERBOARD_PATH = "/leaderboard"
 
 
 class ModifySubmissionError(RuntimeError):
@@ -421,13 +423,93 @@ def build_modification_data(args: argparse.Namespace) -> dict[str, Any]:
     return data
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=(
+def print_update_confirmation(
+    updated: dict[str, Any],
+    *,
+    website: str,
+    requested_submission_id: str,
+    verbose_output: bool,
+) -> None:
+    """Give a definitive, human-readable summary after a successful update."""
+
+    submission_id = str(
+        updated.get("submission_id") or requested_submission_id
+    )
+    display_method = str(updated.get("display_method_name") or "").strip()
+    public_visible = updated.get("public_visible")
+    owner_private = updated.get("anonymous")
+    admin_hidden = updated.get("admin_hidden")
+    leaderboard_url = f"{website}{LEADERBOARD_PATH}"
+
+    print()
+    print("Submission update completed successfully.")
+    print(f"Submission ID: {submission_id}")
+    if display_method:
+        print(f"Display method: {display_method}")
+
+    if public_visible is True:
+        print("Your result is now publicly visible on the InFlux leaderboard.")
+        print(f"View it here: {leaderboard_url}")
+        print("Refresh the page if it was already open.")
+    elif admin_hidden is True:
+        print(
+            "Your requested changes were saved, but the result remains hidden "
+            "because an administrator-level hide is active."
+        )
+        print(
+            f"If this is unexpected, email {SUPPORT_EMAIL} and include "
+            f"submission ID {submission_id}."
+        )
+    elif owner_private is True:
+        print("Your result is hidden from the public leaderboard.")
+        print(
+            f"To verify, refresh {leaderboard_url}; this submission should not "
+            "be publicly listed."
+        )
+        print(
+            "Saved metadata remains attached to the submission and will be used "
+            "if you publish it later."
+        )
+    elif public_visible is False:
+        print(
+            "Your changes were saved, but the server reports that the result is "
+            "not publicly visible."
+        )
+        print(
+            f"If that is unexpected, email {SUPPORT_EMAIL} and include "
+            f"submission ID {submission_id}."
+        )
+    else:
+        print("Your changes were saved.")
+        print(
+            "The server did not return a definitive visibility status. Refresh "
+            f"{leaderboard_url} to verify the public result."
+        )
+
+    if verbose_output:
+        print(f"[verbose] owner private flag: {owner_private}")
+        print(f"[verbose] administrator hidden: {admin_hidden}")
+        print(f"[verbose] publicly visible: {public_visible}")
+
+
+def _run(default_visibility: str | None = None) -> int:
+    if default_visibility == "publish":
+        description = (
+            "Email-verify ownership of an evaluated InFlux submission, then "
+            "publish it and optionally update its display metadata."
+        )
+    elif default_visibility == "hide":
+        description = (
+            "Email-verify ownership of an evaluated InFlux submission, then "
+            "hide it and optionally update its display metadata."
+        )
+    else:
+        description = (
             "Email-verify ownership of an evaluated InFlux submission, then "
             "update its display metadata or public/private intent."
         )
-    )
+
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--id", required=True, help="Submission UUID")
     parser.add_argument(
         "--email",
@@ -446,17 +528,23 @@ def main() -> int:
     parser.add_argument("--publication", default=None)
     parser.add_argument("--url-publication", default=None)
     parser.add_argument("--url-code", default=None)
-    visibility = parser.add_mutually_exclusive_group()
-    visibility.add_argument(
-        "--publish",
-        action="store_true",
-        help="Request public leaderboard visibility.",
-    )
-    visibility.add_argument(
-        "--hide",
-        action="store_true",
-        help="Hide or re-hide the result from the public leaderboard.",
-    )
+    if default_visibility is None:
+        visibility = parser.add_mutually_exclusive_group()
+        visibility.add_argument(
+            "--publish",
+            action="store_true",
+            help="Request public leaderboard visibility.",
+        )
+        visibility.add_argument(
+            "--hide",
+            action="store_true",
+            help="Hide or re-hide the result from the public leaderboard.",
+        )
+    else:
+        parser.set_defaults(
+            publish=default_visibility == "publish",
+            hide=default_visibility == "hide",
+        )
     parser.add_argument(
         "--website",
         default=DEFAULT_WEBSITE,
@@ -580,17 +668,34 @@ def main() -> int:
         submission_id=args.id,
     )
     print(updated.get("message", "Submission result metadata updated."))
-    print(f"Submission ID: {updated.get('submission_id', args.id)}")
-    print(f"Display method: {updated.get('display_method_name', '')}")
-    print(f"Owner private flag: {updated.get('anonymous')}")
-    print(f"Administrator hidden: {updated.get('admin_hidden')}")
-    print(f"Publicly visible: {updated.get('public_visible')}")
+    print_update_confirmation(
+        updated,
+        website=website,
+        requested_submission_id=args.id,
+        verbose_output=args.verbose,
+    )
     return 0
 
 
-if __name__ == "__main__":
+def _entrypoint(default_visibility: str | None = None) -> int:
     try:
-        raise SystemExit(main())
+        return _run(default_visibility)
     except (ModifySubmissionError, requests.RequestException) as exc:
         print(f"Error: {exc}", file=sys.stderr)
-        raise SystemExit(1)
+        return 1
+
+
+def main() -> int:
+    return _entrypoint()
+
+
+def publish_main() -> int:
+    return _entrypoint("publish")
+
+
+def hide_main() -> int:
+    return _entrypoint("hide")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

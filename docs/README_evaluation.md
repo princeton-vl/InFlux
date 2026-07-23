@@ -1,332 +1,313 @@
 # Submit and Evaluate Results
 
-InFlux-Real includes public ground truth camera intrinsics for its validation splits. Ground truth for the test splits is withheld for evaluation through the InFlux submission server.
+InFlux-Real provides public ground truth camera intrinsics for its validation splits. Ground truth for the test splits is withheld and evaluated through the InFlux submission server.
 
-The submission system supports three benchmark targets:
+Submissions may target one or both real-world benchmark partitions:
 
-| Target | Evaluation |
+| `version` | Evaluated benchmark |
 |---|---|
 | `influx` | Original InFlux test split |
 | `influx_pp_real` | InFlux++ Real test split |
-| `all` | Both test splits, with InFlux, InFlux++ Real, and aggregate statistics |
+| `all` | Both test splits, with InFlux, InFlux++ Real, and aggregate results |
 
-Evaluation results are returned by email. Results that are made public are displayed on the [live InFlux leaderboard](https://influx.cs.princeton.edu/leaderboard).
+Evaluation results are returned by email. Published results are displayed on the [live InFlux leaderboard](https://influx.cs.princeton.edu/leaderboard).
 
 ## Installation
 
-Complete the [base installation instructions](README_download.md#base-installation):
+Complete the [base installation instructions](README_download.md#base-installation) before continuing.
+
+Confirm that the submission commands are available:
 
 ```bash
-conda create --name influx python=3.11
-conda activate influx
-pip install -e .
-```
-
-Confirm that the upload command is available:
-
-```bash
+influx-generate-sample --help
 influx-upload --help
+influx-modify-submission --help
+influx-publish-submission --help
+influx-hide-submission --help
 ```
 
-## Required Benchmark Metadata
+## Required Benchmark Split Manifests
 
-Before uploading, the submission client validates the submitted videos and frames using the InFlux-Real split JSON files.
+The template generator and upload client use small benchmark split manifest files to determine which videos belong to the test splits and how many frames each video contains.
 
-By default, it expects the files at:
+By default, they expect:
 
 ```text
 <repository-root>/influx_real_data/influx/video_frame_count_and_split_v1.json
 <repository-root>/influx_real_data/influx_pp_real/video_frame_count_and_split_v2.json
 ```
 
-These are the default locations created by the InFlux-Real download utility.
+These are the default locations created by `influx-download-real`.
 
-The required manifest depends on the selected target:
+The required manifests depend on the selected target:
 
-| Target | Required split manifest |
+| `version` | Required manifest |
 |---|---|
 | `influx` | `video_frame_count_and_split_v1.json` |
 | `influx_pp_real` | `video_frame_count_and_split_v2.json` |
-| `all` | Both files |
+| `all` | Both manifests |
 
-If the files are stored elsewhere, pass their paths explicitly using:
+The video files themselves are not read when generating or validating a submission.
 
-```text
---influx-split-json-path
---influx-pp-real-split-json-path
+## 1. Generate a Submission Template
+
+Generate a JSON template containing the required test videos and frame indices:
+
+```bash
+influx-generate-sample \
+    --version all \
+    --intr-type rad-tan \
+    --method-name my_method \
+    --output submission.json
 ```
 
-The upload client requires the split manifests for local validation but does not read the video files during upload.
+The `--version` option determines which test-video and frame placeholders are generated:
 
-## Submission Format
+- `influx` includes only the original InFlux test split.
+- `influx_pp_real` includes only the InFlux++ Real test split.
+- `all` includes the required videos and frames from both test splits.
 
-A submission is a single JSON file containing metadata followed by per-frame predictions for every required test video.
+Supported intrinsics models are:
 
-The following example uses the radial-tangential Brown–Conrady camera model:
+- [`rad-tan`](https://vovkos.github.io/doxyrest-showcase/opencv/sphinx_rtd_theme/page_tutorial_py_calibration.html): the radial-tangential Brown-Conrady distortion model.
+- [`mei`](https://www.robots.ox.ac.uk/~cmei/articles/single_viewpoint_calib_mei_07.pdf): the Mei single-viewpoint omnidirectional camera model.
 
-```json
+The generated file contains `null` placeholders for every required prediction. Replace each placeholder with a numeric prediction when one is available. Leave a value as `null` when the method fails to produce that prediction or the prediction is otherwise missing.
+
+All required videos, frames, and parameter keys must remain present even when their values are `null`.
+
+### Custom Split-Manifest Paths
+
+If the split manifests are stored outside their default locations, pass the relevant path options to the generator. For `all`, provide both:
+
+```bash
+influx-generate-sample \
+    --version all \
+    --intr-type rad-tan \
+    --method-name my_method \
+    --output submission.json \
+    --influx-split-json-path /path/to/video_frame_count_and_split_v1.json \
+    --influx-pp-real-split-json-path /path/to/video_frame_count_and_split_v2.json
+```
+
+For all generator options:
+
+```bash
+influx-generate-sample --help
+```
+
+## 2. Fill In the Predictions
+
+The abbreviated example below illustrates the structure of a radial-tangential submission targeting both benchmarks. The `...` markers omit additional frames and videos; they must not appear in the uploaded JSON.
+
+```jsonc
 {
   "submission_metadata": {
-    "method_name": "your_method_name",
+    "method_name": "my_method",
     "intrinsics_type": "rad-tan",
-    "version": "influx"
+    "version": "all"
   },
-  "test_video1": {
+  "influx_test_video": {
     "0": {
-      "fx": 0.0,
-      "fy": 0.0,
-      "cx": 0.0,
-      "cy": 0.0,
+      "fx": 1200.0,
+      "fy": 1201.0,
+      "cx": 640.0,
+      "cy": 360.0,
       "k1": 0.0,
       "k2": 0.0,
       "p1": 0.0,
       "p2": 0.0
     },
     "1": {
-      "fx": 0.0,
-      "fy": 0.0,
-      "cx": 0.0,
-      "cy": 0.0,
+      "fx": null,
+      "fy": null,
+      "cx": null,
+      "cy": null,
+      "k1": null,
+      "k2": null,
+      "p1": null,
+      "p2": null
+    }
+    // ... additional frames ...
+  },
+  "influx_pp_real_test_video": {
+    "0": {
+      "fx": 1250.0,
+      "fy": 1250.0,
+      "cx": 640.0,
+      "cy": 360.0,
       "k1": 0.0,
       "k2": 0.0,
       "p1": 0.0,
       "p2": 0.0
     }
+    // ... additional frames ...
   }
+  // ... additional test videos ...
 }
 ```
 
-Each top-level video key must match the stem of a required test-video filename. Frame indices are represented as strings:
+Use the exact test-video identifiers generated by `influx-generate-sample`. Frame indices must be strings such as `"0"`, `"1"`, and `"2"`, without leading zeros.
 
-```text
-"0"
-"1"
-"2"
-```
+### Required Parameters
 
-Do not add leading zeros to frame indices.
-
-### Submission Metadata
-
-| Field | Accepted values |
-|---|---|
-| `method_name` | Name used to identify the submitted method |
-| `intrinsics_type` | `"rad-tan"` or `"mei"` |
-| `version` | `"influx"`, `"influx_pp_real"`, or `"all"` |
-
-The value of `submission_metadata.version` must match the value passed to `influx-upload --version`.
-
-### Required Intrinsics Parameters
-
-For `rad-tan` submissions, every frame must contain:
+For `rad-tan`, every frame must contain:
 
 ```text
 fx, fy, cx, cy, k1, k2, p1, p2
 ```
 
-For `mei` submissions, every frame must contain:
+For `mei`, every frame must contain:
 
 ```text
 fx, fy, cx, cy, xi
 ```
 
-Predictions should be finite numeric values.
+Every required parameter value may be either:
 
-If your method uses a different camera model, contact:
+- A finite JSON number, when the method produces a prediction
+- `null`, when the prediction is missing or the method fails to produce it
 
-`influxbenchmark@gmail.com`
+Do not use `NaN`, positive infinity, or negative infinity. These are not accepted as standard JSON prediction values.
 
-## Generate a Submission Template
+### Metadata Requirements
 
-The base package includes the `influx-generate-sample` utility for creating a submission template with the required test videos and frame indices.
+- `method_name` must be a non-empty string of at most 100 characters.
+- `method_name` may contain letters, numbers, underscores, and dashes, and must begin with a letter, number, or underscore.
+- `intrinsics_type` must be `rad-tan` or `mei`.
+- `version` must be `influx`, `influx_pp_real`, or `all`.
 
-View the available options using:
+A submission targeting `all` must contain every required test video and frame from both benchmark partitions.
 
-```bash
-influx-generate-sample --help
-```
+If your method uses a different camera model, contact `influxbenchmark@gmail.com`.
 
-Fill in every required prediction value before uploading the generated JSON file.
+## 3. Upload the Submission
 
-## Upload a Submission
-
-Use:
-
-```bash
-influx-upload \
-    --email your_email@example.com \
-    --path path/to/submission.json \
-    --method-name your_method_name \
-    --version influx
-```
-
-The method name passed to `--method-name` must exactly match:
-
-```json
-"submission_metadata": {
-  "method_name": "your_method_name"
-}
-```
-
-### Submit to InFlux
+Upload a completed prediction file using:
 
 ```bash
 influx-upload \
     --email your_email@example.com \
-    --path path/to/influx_submission.json \
-    --method-name your_method_name \
-    --version influx
-```
-
-The JSON metadata must contain:
-
-```json
-"version": "influx"
-```
-
-### Submit to InFlux++ Real
-
-```bash
-influx-upload \
-    --email your_email@example.com \
-    --path path/to/influx_pp_real_submission.json \
-    --method-name your_method_name \
-    --version influx_pp_real
-```
-
-The JSON metadata must contain:
-
-```json
-"version": "influx_pp_real"
-```
-
-### Submit to Both Benchmarks
-
-```bash
-influx-upload \
-    --email your_email@example.com \
-    --path path/to/all_submission.json \
-    --method-name your_method_name \
+    --path /path/to/your/submission.json \
+    --method-name my_method \
     --version all
 ```
 
-The JSON metadata must contain:
+The `--version` option selects the benchmark target used for local validation and evaluation. It must match `submission_metadata.version` in the JSON file:
 
-```json
-"version": "all"
-```
+- `influx` evaluates the original InFlux test split.
+- `influx_pp_real` evaluates the InFlux++ Real test split.
+- `all` evaluates both test splits.
 
-A submission targeting `all` must contain every required video and frame from both real-world benchmark test splits.
+The value passed to `--method-name` must exactly match `submission_metadata.method_name` in the JSON file.
 
-## Custom Split-Manifest Paths
+The client validates the file locally before contacting the server. It checks the metadata, benchmark target, required videos and frames, required intrinsics fields, non-null numeric values, filename, and file size. `null` values are accepted as missing predictions.
 
-If InFlux-Real was downloaded outside the default repository directory, pass the corresponding manifest path.
-
-For the original InFlux benchmark:
-
-```bash
-influx-upload \
-    --email your_email@example.com \
-    --path path/to/submission.json \
-    --method-name your_method_name \
-    --version influx \
-    --influx-split-json-path /path/to/video_frame_count_and_split_v1.json
-```
-
-For InFlux++ Real:
-
-```bash
-influx-upload \
-    --email your_email@example.com \
-    --path path/to/submission.json \
-    --method-name your_method_name \
-    --version influx_pp_real \
-    --influx-pp-real-split-json-path /path/to/video_frame_count_and_split_v2.json
-```
-
-For `all`, provide both paths when neither file is stored in its default location.
-
-## Local Validation
-
-Before connecting to the evaluation server, `influx-upload` validates the submission locally.
-
-The client checks:
-
-- The submission is a `.json` file
-- The file does not exceed 512 MiB
-- The JSON contains `submission_metadata`
-- `method_name`, `intrinsics_type`, and `version` are present
-- The method name is at most 100 characters
-- The method name contains only letters, numbers, underscores, and dashes
-- The selected benchmark target is valid
-- The JSON target matches the value passed to `--version`
-- Every required test video is present
-- Every required frame is present
-- Every required intrinsics parameter is present
-- Numeric predictions are finite
-- The command-line method name matches the method name in the JSON
+Submission JSON files may be at most **200 MiB**. The filename must end in `.json`, begin with a letter, number, or underscore, and otherwise contain only letters, numbers, underscores, dots, and dashes.
 
 Extra videos, frames, and parameters are ignored.
 
-The submission filename may contain letters, numbers, underscores, dots, and dashes. It must begin with a letter, number, or underscore and end in `.json`.
+### Email Verification
 
-## Verification and Upload Flow
+After local validation:
 
-After the file passes local validation:
+1. A verification code is sent to the supplied email address.
+2. The client prints the submission UUID.
+3. Enter the verification code when prompted.
+4. The JSON file is uploaded and evaluation is scheduled.
 
-1. The client contacts the InFlux submission server.
-2. A verification code is sent to the supplied email address.
-3. The server creates a submission ID and the client displays it.
-4. Enter the verification code when prompted.
-5. The JSON file is uploaded.
-6. The server schedules the evaluation.
-7. Results are returned by email.
+Save the submission UUID. It is required to publish, hide, or update the resulting leaderboard entry.
 
-Save the submission ID. It is used to identify the result and to publish or modify its leaderboard metadata.
+Evaluation results are typically returned by email within a few hours. Each email address may upload at most **three submissions every seven days**.
 
-Results are typically returned within a few hours.
+If no result email arrives within one to two days, check the spam or junk folder. Then contact `influxbenchmark@gmail.com` and include the submission UUID, method name, benchmark version, and submitter email.
 
-Each email address may upload at most **three submissions every seven days**.
+### Custom Split-Manifest Paths
 
-## Live Leaderboard
+If both split manifests are stored outside their default locations, provide both paths when submitting to `all`:
 
-Public benchmark results are displayed on the:
+```bash
+influx-upload \
+    --email your_email@example.com \
+    --path /path/to/your/submission.json \
+    --method-name my_method \
+    --version all \
+    --influx-split-json-path /path/to/video_frame_count_and_split_v1.json \
+    --influx-pp-real-split-json-path /path/to/video_frame_count_and_split_v2.json
+```
 
-[InFlux Live Leaderboard](https://influx.cs.princeton.edu/leaderboard)
+For `influx` or `influx_pp_real`, only the corresponding split-manifest option is required when its default path is not used.
 
-## Command-Line Reference
-
-View all upload options using:
+For all upload options:
 
 ```bash
 influx-upload --help
 ```
 
-The normal submission workflow uses:
+## 4. Manage the Leaderboard Result
 
-```text
---email
---path
---method-name
---version
+After evaluation is finalized, users can publish or hide a result and update its public display name, publication, and code links. Each modification requires email verification using the original submitter email address.
+
+### Publish a Result
+
+Submissions are private by default. Publish a result using:
+
+```bash
+influx-publish-submission \
+    --id submission_uuid \
+    --email your_email@example.com
 ```
 
-Additional options are available for:
+Public metadata may be supplied in the same command:
 
-- Using a different submission-server URL
-- Supplying custom locations for the InFlux split manifest
-- Supplying custom locations for the InFlux++ Real split manifest
+```bash
+influx-publish-submission \
+    --id submission_uuid \
+    --email your_email@example.com \
+    --method-name "Public Display Name" \
+    --publication "Publication or Venue" \
+    --url-publication "https://example.com/paper" \
+    --url-code "https://example.com/code"
+```
 
-## Related Documentation
+The values supplied to `--url-publication` and `--url-code` must be absolute `http` or `https` URLs with a host.
 
-- [Installation and Data Downloads](README_download.md)
-- [Download and extract InFlux-Real](README_download_real.md)
-- [InFlux-Real dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Real)
-- [Live leaderboard](https://influx.cs.princeton.edu/leaderboard)
-- [Main project README](../README.md)
+The `--method-name` option changes only the public display name. It does not alter the immutable method name stored in the submitted JSON. Pass an empty string to restore the original method name as the public display name.
 
-## Support
+### Hide a Result
 
-For questions about submission formatting, evaluation, or the leaderboard, contact:
+Hide or re-hide a published result using:
 
-`influxbenchmark@gmail.com`
+```bash
+influx-hide-submission \
+    --id submission_uuid \
+    --email your_email@example.com
+```
+
+### Update Public Metadata
+
+Update the public display name, publication, or code links without changing visibility using:
+
+```bash
+influx-modify-submission \
+    --id submission_uuid \
+    --email your_email@example.com \
+    --method-name "Updated Public Display Name" \
+    --publication "Updated Publication" \
+    --url-publication "https://example.com/updated-paper" \
+    --url-code "https://example.com/updated-code"
+```
+
+The generic command can also change visibility by adding either `--publish` or `--hide`.
+
+At least one metadata option, `--publish`, or `--hide` must be supplied. The public display name may contain at most 100 characters, and the publication field may contain at most 200 characters. Publication and code links must be absolute `http` or `https` URLs with a host.
+
+For all modification options:
+
+```bash
+influx-modify-submission --help
+```
+
+## Live Leaderboard
+
+Published results are displayed on the [InFlux live leaderboard](https://influx.cs.princeton.edu/leaderboard).

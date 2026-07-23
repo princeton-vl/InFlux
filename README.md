@@ -161,7 +161,7 @@ The base installation provides the Python dependencies and command-line utilitie
 
 - Downloading and extracting InFlux-Real
 - Downloading and extracting selected InFlux-Synth partitions and modalities
-- Generating and uploading benchmark submissions
+- Generating, uploading, and managing benchmark submissions
 
 The InFlux-Synth data loader, Kalibr extension, and InFlux utility scripts have separate setup and usage instructions below.
 
@@ -194,9 +194,11 @@ For dataset statistics, file structure, and details about ground truth modalitie
 
 ### Submit and Evaluate Results
 
-We provide submission utilities and instructions [here](docs/README_evaluation.md) for validating and uploading predictions to the InFlux evaluation server.
+We provide submission utilities and instructions [here](docs/README_evaluation.md) for generating submission templates, validating and uploading predictions, and managing how evaluated results appear on the InFlux leaderboard.
 
-Submissions may target the original InFlux test split, the InFlux++ Real test split, or both real-world benchmark test splits. Evaluation results are returned by email, and public results are displayed on the live leaderboard.
+Submissions may target the original InFlux test split, the InFlux++ Real test split, or both real-world benchmark test splits. Evaluation results are returned by email, and published results are displayed on the live leaderboard.
+
+After evaluation, users can publish or hide results and update the public display name, publication, and code links.
 
 **Related link:** [Live Leaderboard](https://influx.cs.princeton.edu/leaderboard)
 
@@ -206,7 +208,7 @@ The InFlux++ work includes an InFlux-Synth data loader for loading RGB frames wi
 
 Setup and usage instructions are available [here](docs/README_dataloader.md).
 
-The data loader also supports applying lens distortion to the released undistorted RGB images, along with other forms of data augmentation that may be useful during training.
+The data loader also supports applying lens distortion to the released undistorted RGB images, as well as other forms of data augmentation that may be useful during training.
 
 ### Use the Kalibr Extension
 

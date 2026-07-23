@@ -165,6 +165,30 @@ The benchmark JSON files remain under their corresponding partition directories.
 
 For benchmark details and the ground truth annotation schema, see the [InFlux-Real dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Real).
 
+## Verify Extracted Frames
+
+After extracting TIFF frames, generate a completeness report using:
+
+```bash
+influx-verify-real
+```
+
+By default, the command examines:
+
+```text
+<repository-root>/influx_real_data/
+```
+
+To inspect a custom output directory, pass it as a positional argument:
+
+```bash
+influx-verify-real /path/to/InFlux-Real
+```
+
+The report compares the immediate frame directories and their `.tiff` file counts against the frame counts in the corresponding benchmark JSON files.
+
+The verifier reports both `influx/` and `influx_pp_real/`. If only one partition was downloaded or extracted, warnings about the absent partition are expected.
+
 ## Repeated or Interrupted Downloads
 
 To retry a download, rerun the same command with the same output directory:
@@ -194,4 +218,4 @@ HF_HUB_DISABLE_XET=1 influx-download-real
 
 After downloading InFlux-Real, follow the [Submit and Evaluate Results](README_evaluation.md) guide to generate, validate, and upload test-set predictions.
 
-Public results are displayed on the [live InFlux leaderboard](https://influx.cs.princeton.edu/leaderboard).
+Published results are displayed on the [live InFlux leaderboard](https://influx.cs.princeton.edu/leaderboard).

@@ -53,6 +53,7 @@ REQUEST_TIMEOUT_SECONDS = 60
 UPLOAD_TIMEOUT_SECONDS = 15 * 60
 MAX_ERROR_DETAIL_CHARS = 320
 MAX_VALIDATION_DETAIL_ITEMS = 8
+SUPPORT_EMAIL = "influxbenchmark@gmail.com"
 CSRF_COOKIE_NAMES = ("csrftoken", "influx_dev_csrftoken")
 
 website = DEFAULT_WEBSITE
@@ -275,10 +276,33 @@ def friendly_http_error(
             "match, or upload a compact JSON representation."
         )
     elif status == 429:
-        message = (
-            "Too many verification attempts or requests were made. Wait briefly, "
-            "then rerun the command for a fresh submission."
-        )
+        payload = response_json_or_none(response) or {}
+        if payload.get("code") == "SUBMISSION_RATE_LIMIT":
+            limit = payload.get("limit")
+            window_days = payload.get("window_days")
+            next_eligible_at = payload.get("next_eligible_at")
+            support_email = payload.get("support_email") or SUPPORT_EMAIL
+            if isinstance(limit, int) and isinstance(window_days, int):
+                message = (
+                    f"This email address has reached the InFlux limit of {limit} "
+                    f"queued submissions in a rolling {window_days}-day window."
+                )
+            else:
+                message = "This email address has reached the InFlux submission limit."
+            if isinstance(next_eligible_at, str) and next_eligible_at.strip():
+                message += (
+                    " The next submission may be queued after "
+                    f"{next_eligible_at.strip()}."
+                )
+            message += (
+                " Keep the existing submission IDs and do not create duplicates. "
+                f"If this seems incorrect, email {support_email}."
+            )
+        else:
+            message = (
+                "Too many verification attempts or requests were made. Wait "
+                "briefly, then rerun the command for a fresh submission."
+            )
     elif status == 503:
         message = (
             "The InFlux submission service is temporarily unavailable or in "
@@ -947,6 +971,41 @@ def upload_file(
         )
 
 
+def print_evaluation_next_steps(
+    upload_id: str,
+    *,
+    email: str,
+    method_name: str,
+    version: str,
+) -> None:
+    """Explain what happens after queueing and how to request support."""
+
+    print()
+    print("Your submission is queued for evaluation.")
+    print(f"Submission ID: {upload_id}")
+    print(f"Evaluation results will be sent to: {email}")
+    print(
+        "Most submissions receive a result email within a few hours, although "
+        "a busy queue or ground-truth cache staging can take longer."
+    )
+    print(
+        "If no result email arrives within 1-2 days, check your spam or junk "
+        f"folder, then email {SUPPORT_EMAIL} and include:"
+    )
+    print(f"  - submission ID: {upload_id}")
+    print(f"  - method name: {method_name}")
+    print(f"  - benchmark version: {version}")
+    print(f"  - submitter email: {email}")
+    print(
+        "Keep the submission ID. It is the primary identifier for this "
+        "evaluation and is needed for support or later publication changes."
+    )
+    print(
+        "Do not create a duplicate submission unless support asks you to; the "
+        "existing evaluation may still be queued or running."
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -1029,6 +1088,12 @@ def run(args: argparse.Namespace) -> int:
     code = input("Please enter the verification code sent to your email: ")
     verify_code(upload_id, code)
     upload_file(upload_id, upload_path)
+    print_evaluation_next_steps(
+        upload_id,
+        email=args.email,
+        method_name=args.method_name,
+        version=args.version,
+    )
     return 0
 
 
