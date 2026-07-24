@@ -10,7 +10,7 @@ Submissions may target one or both real-world benchmark partitions:
 | `influx_pp_real` | InFlux++ Real test split |
 | `all` | Both test splits, with InFlux, InFlux++ Real, and aggregate results |
 
-Evaluation results are returned by email. Published results are displayed on the [live InFlux leaderboard](https://influx.cs.princeton.edu/leaderboard).
+Evaluation results are returned by email. Results are private by default. After evaluation, the submitter can publish a result to the [live InFlux leaderboard](https://influx.cs.princeton.edu/leaderboard).
 
 ## Installation
 
