@@ -544,7 +544,7 @@ def verify_code(upload_id: str, code: str, url: str | None = None) -> bool:
     if not re.fullmatch(r"\d{6}", code):
         raise UploadSubmissionError(
             "Verification code must contain exactly six digits. No verification "
-            "request was sent."
+            "attempt was sent to the server."
         )
     if url is None:
         url = f"{website}/verify"
@@ -1085,7 +1085,11 @@ def run(args: argparse.Namespace) -> int:
 
     initialize_session(args.website)
     upload_id = request_verification(args)
-    code = input("Please enter the verification code sent to your email: ")
+    print(
+        "Enter the six-digit code from the newest verification email for "
+        f"submission ID {upload_id}."
+    )
+    code = input("Verification code: ")
     verify_code(upload_id, code)
     upload_file(upload_id, upload_path)
     print_evaluation_next_steps(

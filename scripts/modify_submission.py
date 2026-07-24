@@ -48,6 +48,8 @@ def compact_response_text(value: str, *, limit: int = MAX_ERROR_DETAIL_CHARS) ->
     """Turn an HTML/plain response body into a bounded one-line diagnostic."""
 
     text = html.unescape(value or "")
+    text = re.sub(r"<script\b[^>]*>.*?</script>", " ", text, flags=re.I | re.S)
+    text = re.sub(r"<style\b[^>]*>.*?</style>", " ", text, flags=re.I | re.S)
     text = re.sub(r"<[^>]+>", " ", text)
     text = " ".join(text.split())
     if len(text) > limit:
@@ -100,7 +102,19 @@ def friendly_http_error(
     identifier = submission_id or "the requested submission"
 
     if status == 400:
-        message = "The server rejected the request."
+        payload = response_json_or_none(response) or {}
+        if stage == STAGE_VERIFY:
+            message = "The verification code was not accepted."
+            remaining = payload.get("attempts_remaining")
+            if isinstance(remaining, int):
+                message += f" Attempts remaining: {remaining}."
+        elif stage == STAGE_UPDATE:
+            message = (
+                "The server rejected one or more requested metadata or visibility "
+                "values."
+            )
+        else:
+            message = "The server rejected the request."
     elif status == 401:
         message = "The modification service rejected authentication."
     elif status == 403:
@@ -161,6 +175,12 @@ def friendly_http_error(
             "The InFlux service encountered a temporary server-side problem while "
             f"{stage_label(stage)}. No local retry was attempted."
         )
+        if stage == STAGE_UPDATE:
+            message += (
+                " The update may still have reached the server; refresh the "
+                "leaderboard and inspect the current submission state before "
+                "retrying."
+            )
     else:
         message = (
             f"The server returned HTTP {status} while {stage_label(stage)}."
@@ -192,10 +212,16 @@ def request_with_friendly_errors(
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
     except requests.Timeout as exc:
+        ambiguity = (
+            " The update may still have reached the server; refresh the "
+            "leaderboard and inspect the current submission state before retrying."
+            if stage == STAGE_UPDATE
+            else ""
+        )
         raise ModifySubmissionError(
             f"Timed out after {REQUEST_TIMEOUT_SECONDS} seconds while "
-            f"{stage_label(stage)}. Check connectivity and retry; no update was "
-            "confirmed by this client."
+            f"{stage_label(stage)}. No update was confirmed by this client."
+            f"{ambiguity}"
         ) from exc
     except requests.exceptions.SSLError as exc:
         raise ModifySubmissionError(
@@ -203,9 +229,15 @@ def request_with_friendly_errors(
             "Check the --website URL and local certificate configuration."
         ) from exc
     except requests.ConnectionError as exc:
+        ambiguity = (
+            " The update may still have reached the server; refresh the "
+            "leaderboard and inspect the current submission state before retrying."
+            if stage == STAGE_UPDATE
+            else ""
+        )
         raise ModifySubmissionError(
             f"Could not connect to {website!r} while {stage_label(stage)}. Check "
-            "network access, DNS, and --website."
+            f"network access, DNS, and --website.{ambiguity}"
         ) from exc
     except requests.RequestException as exc:
         raise ModifySubmissionError(
@@ -553,7 +585,11 @@ def _run(default_visibility: str | None = None) -> int:
     parser.add_argument(
         "--code",
         default=None,
-        help="Six-digit verification code; omitted means prompt securely.",
+        help=(
+            "Six-digit verification code. Omit this option to prompt securely; "
+            "passing it on the command line may expose it in shell history or "
+            "process listings."
+        ),
     )
     parser.add_argument(
         "--verbose",
@@ -637,6 +673,10 @@ def _run(default_visibility: str | None = None) -> int:
 
     code = args.code
     if code is None:
+        print(
+            "Enter the six-digit code from the newest modification email for "
+            f"submission ID {args.id}."
+        )
         code = validate_verification_code(
             getpass.getpass("Verification code: ").strip()
         )
@@ -680,6 +720,13 @@ def _run(default_visibility: str | None = None) -> int:
 def _entrypoint(default_visibility: str | None = None) -> int:
     try:
         return _run(default_visibility)
+    except KeyboardInterrupt:
+        print(
+            "\nCancelled by user. No metadata or visibility update was "
+            "confirmed by this client.",
+            file=sys.stderr,
+        )
+        return 130
     except (ModifySubmissionError, requests.RequestException) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
