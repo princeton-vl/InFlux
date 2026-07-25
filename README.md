@@ -196,9 +196,11 @@ For dataset statistics, file structure, and details about ground truth modalitie
 
 We provide submission utilities and instructions [here](docs/README_evaluation.md) for generating submission templates, validating and uploading predictions, and managing how evaluated results appear on the InFlux leaderboard.
 
-Submissions may target the original InFlux test split, the InFlux++ Real test split, or both real-world benchmark test splits. Evaluation results are returned by email, and published results are displayed on the live leaderboard.
+Submissions may target the original InFlux test split, the InFlux++ Real test split, or both real-world benchmark test splits. Evaluation results are returned by email.
 
-After evaluation, users can publish or hide results and update the public display name, publication, and code links.
+Results are private by default. After evaluation, the submitter can publish a result to the live InFlux leaderboard.
+
+Users can also hide a published result or update its public display name, publication, and code links.
 
 **Related link:** [Live Leaderboard](https://influx.cs.princeton.edu/leaderboard)
 

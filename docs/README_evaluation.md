@@ -310,4 +310,4 @@ influx-modify-submission --help
 
 ## Live Leaderboard
 
-Published results are displayed on the [InFlux live leaderboard](https://influx.cs.princeton.edu/leaderboard).
+Results are private by default. Use `influx-publish-submission` to make an evaluated result visible on the [InFlux live leaderboard](https://influx.cs.princeton.edu/leaderboard).

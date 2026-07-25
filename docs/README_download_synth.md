@@ -211,7 +211,7 @@ Successfully processed compressed files are removed after extraction.
 
 For complete modality descriptions, array shapes, and coordinate conventions, see the [InFlux-Synth dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth).
 
-## Verify a Fully Extracted Release
+## Check a Fully Extracted Release
 
 After extracting the complete release, generate a completeness report using:
 
@@ -234,6 +234,8 @@ influx-verify-synth /path/to/InFlux-Synth
 The report checks the expected scene counts and verifies that each required file type contains 240 files per scene.
 
 The current verifier is designed for a fully extracted release. In the `_full` partitions, it expects RGB images, camera metadata, both depth variants, and both surface normal variants. Intentionally partial or sampled downloads will therefore be reported as incomplete.
+
+This is an informational count-based report. It does not inspect numerical array contents or return a nonzero exit status when incomplete data is present.
 
 ## Repeated or Interrupted Downloads
 
