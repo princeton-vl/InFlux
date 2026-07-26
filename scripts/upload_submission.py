@@ -66,6 +66,14 @@ class UploadSubmissionError(RuntimeError):
     """Expected, user-facing upload-client failure."""
 
 
+class RetryableVerificationCodeError(UploadSubmissionError):
+    """An incorrect code that may be retried for the same submission UUID."""
+
+    def __init__(self, message: str, *, attempts_remaining: int):
+        super().__init__(message)
+        self.attempts_remaining = attempts_remaining
+
+
 STAGE_BOOTSTRAP = "bootstrap"
 STAGE_REQUEST = "request_verification"
 STAGE_VERIFY = "verify_code"
@@ -214,6 +222,7 @@ def friendly_http_error(
     detail = server_error_detail(response)
     validation = validation_detail(response)
     identifier = upload_id or "the submission"
+    retryable_verification_attempts: int | None = None
 
     if status == 400:
         if stage == STAGE_VERIFY:
@@ -222,6 +231,8 @@ def friendly_http_error(
             remaining = payload.get("attempts_remaining")
             if isinstance(remaining, int):
                 message += f" Attempts remaining: {remaining}."
+                if remaining > 0:
+                    retryable_verification_attempts = remaining
         elif stage == STAGE_UPLOAD:
             message = (
                 "The server rejected the uploaded JSON. Local validation passed, "
@@ -325,6 +336,11 @@ def friendly_http_error(
         additions.append(f"Validation detail: {validation}")
     if additions:
         message += " " + " ".join(additions)
+    if retryable_verification_attempts is not None:
+        return RetryableVerificationCodeError(
+            message,
+            attempts_remaining=retryable_verification_attempts,
+        )
     return UploadSubmissionError(message)
 
 
@@ -561,6 +577,46 @@ def verify_code(upload_id: str, code: str, url: str | None = None) -> bool:
     require_json_object(response, stage=STAGE_VERIFY)
     print("Verification successful.")
     return True
+
+
+def verify_code_interactively(
+    upload_id: str,
+    *,
+    prompt=input,
+) -> None:
+    """Retry ordinary code-entry mistakes without creating a new submission."""
+
+    while True:
+        try:
+            code = prompt("Verification code: ")
+        except EOFError as exc:
+            raise UploadSubmissionError(
+                "No verification code was entered. The existing submission was "
+                f"not queued. Submission ID: {upload_id}."
+            ) from exc
+
+        normalized = str(code).strip()
+        if not re.fullmatch(r"\d{6}", normalized):
+            print(
+                "Error: Verification code must contain exactly six digits. "
+                "No verification attempt was sent to the server.",
+                file=sys.stderr,
+            )
+            print(
+                "Please try again using the newest code for the same submission ID.",
+                file=sys.stderr,
+            )
+            continue
+
+        try:
+            verify_code(upload_id, normalized)
+            return
+        except RetryableVerificationCodeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            print(
+                "Please try again using the newest code for the same submission ID.",
+                file=sys.stderr,
+            )
 
 
 def check_json_depth(
@@ -1089,8 +1145,7 @@ def run(args: argparse.Namespace) -> int:
         "Enter the six-digit code from the newest verification email for "
         f"submission ID {upload_id}."
     )
-    code = input("Verification code: ")
-    verify_code(upload_id, code)
+    verify_code_interactively(upload_id)
     upload_file(upload_id, upload_path)
     print_evaluation_next_steps(
         upload_id,

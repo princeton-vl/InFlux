@@ -216,6 +216,8 @@ After local validation:
 3. Enter the verification code when prompted.
 4. The JSON file is uploaded and evaluation is scheduled.
 
+If the verification code is mistyped, the client will keep the same submission UUID and prompt again while attempts remain. If the code expires or the maximum number of attempts is reached, rerun `influx-upload` to create a fresh submission.
+
 Save the submission UUID. It is required to publish, hide, or update the resulting leaderboard entry.
 
 Evaluation results are typically returned by email within a few hours. Each email address may upload at most **three submissions every seven days**.

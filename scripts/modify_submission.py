@@ -26,6 +26,14 @@ class ModifySubmissionError(RuntimeError):
     """Expected, user-facing failure from the modification client."""
 
 
+class RetryableModificationCodeError(ModifySubmissionError):
+    """An incorrect interactive code that may reuse the same challenge."""
+
+    def __init__(self, message: str, *, attempts_remaining: int):
+        super().__init__(message)
+        self.attempts_remaining = attempts_remaining
+
+
 CSRF_COOKIE_NAMES = ("csrftoken", "influx_dev_csrftoken")
 
 
@@ -100,6 +108,7 @@ def friendly_http_error(
     status = int(response.status_code)
     detail = server_error_detail(response)
     identifier = submission_id or "the requested submission"
+    retryable_verification_attempts: int | None = None
 
     if status == 400:
         payload = response_json_or_none(response) or {}
@@ -108,6 +117,8 @@ def friendly_http_error(
             remaining = payload.get("attempts_remaining")
             if isinstance(remaining, int):
                 message += f" Attempts remaining: {remaining}."
+                if remaining > 0:
+                    retryable_verification_attempts = remaining
         elif stage == STAGE_UPDATE:
             message = (
                 "The server rejected one or more requested metadata or visibility "
@@ -189,6 +200,11 @@ def friendly_http_error(
     if detail and detail.casefold() not in message.casefold():
         message += f" Server detail: {detail}"
 
+    if retryable_verification_attempts is not None:
+        return RetryableModificationCodeError(
+            message,
+            attempts_remaining=retryable_verification_attempts,
+        )
     return ModifySubmissionError(message)
 
 
@@ -411,10 +427,60 @@ def validate_optional_display_text(
 def validate_verification_code(value: str) -> str:
     if not re.fullmatch(r"\d{6}", value):
         raise ModifySubmissionError(
-            "Verification code must contain exactly six digits. Rerun the command "
-            "and enter the code from the newest modification email."
+            "Verification code must contain exactly six digits."
         )
     return value
+
+
+def verify_modification_code_interactively(
+    session: requests.Session,
+    *,
+    challenge_id: str,
+    website: str,
+    submission_id: str,
+    headers: dict[str, str],
+    prompt=getpass.getpass,
+) -> dict[str, Any]:
+    """Retry ordinary code-entry mistakes using one existing challenge."""
+
+    while True:
+        try:
+            raw_code = prompt("Verification code: ")
+        except EOFError as exc:
+            raise ModifySubmissionError(
+                "No verification code was entered. No metadata or visibility "
+                f"update was applied. Submission ID: {submission_id}."
+            ) from exc
+
+        normalized = str(raw_code).strip()
+        if not re.fullmatch(r"\d{6}", normalized):
+            print(
+                "Error: Verification code must contain exactly six digits. "
+                "No verification attempt was sent to the server.",
+                file=sys.stderr,
+            )
+            print(
+                "Please try again using the newest code for the same submission.",
+                file=sys.stderr,
+            )
+            continue
+
+        try:
+            return checked_json_post(
+                session,
+                f"{website}/verify_modify/{challenge_id}/",
+                data={"code": normalized},
+                headers=headers,
+                stage=STAGE_VERIFY,
+                website=website,
+                submission_id=submission_id,
+            )
+        except RetryableModificationCodeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            print(
+                "Please try again using the newest code for the same submission.",
+                file=sys.stderr,
+            )
 
 
 def validate_metadata(args: argparse.Namespace) -> None:
@@ -677,22 +743,30 @@ def _run(default_visibility: str | None = None) -> int:
             "Enter the six-digit code from the newest modification email for "
             f"submission ID {args.id}."
         )
-        code = validate_verification_code(
-            getpass.getpass("Verification code: ").strip()
-        )
 
     if args.verbose:
         print("Stage: verify ownership code")
 
-    verified = checked_json_post(
-        session,
-        f"{website}/verify_modify/{challenge_id}/",
-        data={"code": code},
-        headers=headers,
-        stage=STAGE_VERIFY,
-        website=website,
-        submission_id=args.id,
-    )
+    if code is None:
+        verified = verify_modification_code_interactively(
+            session,
+            challenge_id=challenge_id,
+            website=website,
+            submission_id=args.id,
+            headers=headers,
+        )
+    else:
+        # Explicit --code remains a one-shot noninteractive path. A rejected
+        # command-line code never falls back to an unexpected prompt.
+        verified = checked_json_post(
+            session,
+            f"{website}/verify_modify/{challenge_id}/",
+            data={"code": code},
+            headers=headers,
+            stage=STAGE_VERIFY,
+            website=website,
+            submission_id=args.id,
+        )
     print(verified.get("message", "Modification verification successful."))
 
     if args.verbose:
