@@ -1,3 +1,9 @@
+Except where otherwise noted, code developed by the Princeton Vision & Learning
+Lab in this repository is licensed under the BSD 3-Clause License below.
+Third-party software included in this repository is governed by the license and
+notice files accompanying the relevant third-party component. This license does
+not modify or supersede those third-party licenses.
+
 BSD 3-Clause License
 
 Copyright (c) 2025, Princeton Vision & Learning Lab
