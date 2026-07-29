@@ -16,6 +16,7 @@ import requests
 
 
 DEFAULT_WEBSITE = "https://influx.cs.princeton.edu"
+SUBMIT_PATH = "/submit/"
 REQUEST_TIMEOUT_SECONDS = 60
 MAX_ERROR_DETAIL_CHARS = 240
 SUPPORT_EMAIL = "influxbenchmark@gmail.com"
@@ -690,7 +691,7 @@ def _run(default_visibility: str | None = None) -> int:
     bootstrap = request_with_friendly_errors(
         session,
         "GET",
-        f"{website}/request_submit/",
+        f"{website}{SUBMIT_PATH}",
         stage=STAGE_BOOTSTRAP,
         website=website,
         submission_id=args.id,
@@ -709,7 +710,7 @@ def _run(default_visibility: str | None = None) -> int:
 
     headers = {
         "X-CSRFToken": csrf_token,
-        "Referer": f"{website}/request_submit/",
+        "Referer": f"{website}{SUBMIT_PATH}",
         "Accept": "application/json",
     }
 

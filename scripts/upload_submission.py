@@ -47,6 +47,7 @@ DEFAULT_INFLUX_PP_REAL_SPLIT_JSON_PATH = (
 )
 
 DEFAULT_WEBSITE = "https://influx.cs.princeton.edu"
+SUBMIT_PATH = "/submit/"
 MAX_FILE_SIZE = 200 * 1024 * 1024  # 200 MiB
 MAX_JSON_DEPTH = 10
 REQUEST_TIMEOUT_SECONDS = 60
@@ -494,7 +495,7 @@ def initialize_session(website_url: str) -> None:
     response = request_with_friendly_errors(
         session,
         "GET",
-        f"{website}/request_submit/",
+        f"{website}{SUBMIT_PATH}",
         stage=STAGE_BOOTSTRAP,
     )
     csrf_token = csrf_token_from_session(session)
@@ -507,7 +508,7 @@ def initialize_session(website_url: str) -> None:
 
     headers = {
         "X-CSRFToken": csrf_token,
-        "Referer": f"{website}/request_submit/",
+        "Referer": f"{website}{SUBMIT_PATH}",
     }
     if verbose:
         print(
@@ -526,7 +527,7 @@ def _require_runtime_session() -> tuple[requests.Session, dict[str, str]]:
 def request_verification(args: argparse.Namespace, url: str | None = None) -> str:
     item, request_headers = _require_runtime_session()
     if url is None:
-        url = f"{website}/request_submit/"
+        url = f"{website}{SUBMIT_PATH}"
 
     response = request_with_friendly_errors(
         item,
