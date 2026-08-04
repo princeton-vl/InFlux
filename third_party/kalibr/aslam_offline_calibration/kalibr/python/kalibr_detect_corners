@@ -1,0 +1,261 @@
+#!/usr/bin/env python
+print("importing libraries")
+import rosbag
+import cv_bridge
+
+import sm
+from sm import PlotCollection
+import aslam_cv as acv
+import aslam_cameras_april as acv_april
+import aslam_cv_backend as acvb
+import kalibr_common as kc
+import kalibr_camera_calibration as kcc
+
+import csv
+import cv2
+import os
+import json
+import numpy as np
+import multiprocessing
+import pylab as pl
+import argparse
+import sys
+import random
+import signal
+
+np.set_printoptions(suppress=True)
+
+def initBagDataset(bagfile, topic, from_to, freq):
+    print("\tDataset:          {0}".format(bagfile))
+    print("\tTopic:            {0}".format(topic))
+    reader = kc.BagImageDatasetReader(bagfile, topic, bag_from_to=from_to, bag_freq=freq)
+    print("\tNumber of images: {0}".format(reader.numImages()))
+    return reader
+
+def initFramesDataset(frames_dir, from_to):
+    print("\tDataset:          {0}".format(frames_dir))
+    reader = kc.FramesImageDatasetReader(frames_dir, from_to=from_to)
+    print("\tNumber of images: {0}".format(reader.numImages()))
+    return reader
+
+"""
+Object that mimics a kc.BagImageDatasetReader for when hardcoded observation coordinates are provided.
+"""
+class DummyDataset():
+    def __init__(self, topic, image_width, image_height):
+        self.topic = topic
+        self.image_width = image_width
+        self.image_height = image_height
+        self.first_time = acv.Time.now()
+
+    def numImages(self):
+        return 0
+
+    def getImage(self, obs_index):
+        timestamp = self.first_time + acv.Duration(obs_index)
+        img = np.zeros((self.image_height, self.image_width), dtype=np.uint8)
+        return timestamp, img
+
+
+#available models
+cameraModels = { 'pinhole-radtan': acvb.DistortedPinhole,
+                 'pinhole-equi':   acvb.EquidistantPinhole,
+                 'pinhole-fov':    acvb.FovPinhole,
+                 'omni-none':      acvb.Omni,
+                 'omni-radtan':    acvb.DistortedOmni,
+                 'eucm-none':      acvb.ExtendedUnified,
+                 'ds-none':        acvb.DoubleSphere}
+
+def signal_exit(signal, frame):
+    sm.logWarn("Shutdown requested! (CTRL+C)")
+    sys.exit(2)
+
+def parseArgs():
+    class KalibrArgParser(argparse.ArgumentParser):
+        def error(self, message):
+            self.print_help()
+            sm.logError('%s' % message)
+            sys.exit(2)
+        def format_help(self):
+            formatter = self._get_formatter()
+            formatter.add_text(self.description)
+            formatter.add_usage(self.usage, self._actions,
+                                self._mutually_exclusive_groups)
+            for action_group in self._action_groups:
+                formatter.start_section(action_group.title)
+                formatter.add_text(action_group.description)
+                formatter.add_arguments(action_group._group_actions)
+                formatter.end_section()
+            formatter.add_text(self.epilog)
+            return formatter.format_help()     
+        
+    usage = """
+    Example usage to calibrate a camera system with two cameras using an aprilgrid. 
+    
+    cam0: omnidirection model with radial-tangential distortion
+    cam1: pinhole model with equidistant distortion
+    
+    %(prog)s --models omni-radtan pinhole-equi --target aprilgrid.yaml \\
+              --bag MYROSBAG.bag --topics /cam0/image_raw /cam1/image_raw
+    
+    example aprilgrid.yaml:
+        target_type: 'aprilgrid'
+        tagCols: 6
+        tagRows: 6
+        tagSize: 0.088  #m
+        tagSpacing: 0.3 #percent of tagSize"""
+            
+    parser = KalibrArgParser(description='Calibrate the intrinsics and extrinsics of a camera system with non-shared overlapping field of view.', usage=usage)
+    parser.add_argument('--models', nargs='+', dest='models', help='The camera model {0} to estimate'.format(list(cameraModels.keys())), required=True)
+
+    groupSource = parser.add_argument_group('Data source')
+    groupSource.add_argument('--bag', dest='bagfile', help='The bag file with the data. Alternatively, provide `--frames-dir`.')
+    groupSource.add_argument('--topics', nargs='+', dest='topics', help='The list of image topics')
+    groupSource.add_argument('--frames-dir', dest='frames_dir', help='The directory containing image files. Alternatively, provide `--bag`.')
+    groupSource.add_argument('--bag-freq', metavar='bag_freq', type=float, help='Frequency to extract features at [hz]')
+    groupSource.add_argument('--from-to', metavar='from_to', type=int, nargs=2, help='Use the bag data starting from up to these frame indices [s]')
+
+    groupTarget = parser.add_argument_group('Calibration target configuration')
+    groupTarget.add_argument('--target', dest='targetYaml', help='Calibration target configuration as yaml file', required=True)
+    
+    outputSettings = parser.add_argument_group('Output options')
+    outputSettings.add_argument('--verbose', action='store_true', dest='verbose', help='Enable (really) verbose output (disables plots)')
+    outputSettings.add_argument('--detection-coords', dest='detection_coords', help='If provided will write detected 2D observation coordinates. Format: multiple points per observation, one observation per image. Rows are <observation index>,<x coordinate>,<y coordinate>, where the origin is in the top left.')
+    outputSettings.add_argument('--detection-successes', dest='detection_successes', help='If provided, will write success/failure of observation corner detections. Format: rows are <observation index>,<status>, where status is either 0 (failed detection) or 1 (successful detection).')
+    outputSettings.add_argument('--output-dir', dest='output_dir', help='Destination directory to write output file (JSON)', required=True)
+    outputSettings.add_argument('--plot', action='store_true', dest='plot', help='Plot during calibration (this could be slow).')
+
+    #print help if no argument is specified
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit(2)
+        
+    #Parser the argument list
+    try:
+        parsed = parser.parse_args()
+    except:
+        sys.exit(2)
+    
+    # Argument validation
+    if len(parsed.topics) != len(parsed.models):
+        sm.logError("Please specify exactly one camera model (--models) for each topic (--topics).")
+        sys.exit(2)
+
+    if (parsed.bagfile is None) == (parsed.frames_dir is None):
+        sm.logError("Please provide exactly one of `--bag` or `--frames-dir` as input.")
+        sys.exit(2)
+    
+    return parsed
+
+
+def main():
+    parsed = parseArgs()
+    
+    #logging modes
+    if parsed.verbose:
+        sm.setLoggingLevel(sm.LoggingLevel.Debug)
+    else:
+        sm.setLoggingLevel(sm.LoggingLevel.Info)
+
+    #register signal handler
+    signal.signal(signal.SIGINT, signal_exit)
+
+    targetConfig = kc.CalibrationTargetParameters(parsed.targetYaml)
+
+    noTransformation=True
+
+    #create camera objects, initialize the intrinsics and extract targets
+    cameraList = list()
+    starting_intrinsics_list = list()
+    numCams = len(parsed.topics)
+
+    for cam_id in range(0, numCams):
+        topic = parsed.topics[cam_id]
+        modelName = parsed.models[cam_id]
+        print("Initializing cam{0}:".format(cam_id))
+        print("\tCamera model:\t  {0}".format(modelName))
+
+        if modelName in cameraModels:
+            # open dataset 
+            if parsed.bagfile:
+                print("Initializing Bag Dataset")
+                dataset = initBagDataset(parsed.bagfile, topic, parsed.from_to, parsed.bag_freq)
+            elif parsed.frames_dir:
+                print(f"Initializing frames directory dataset with FROM_TO: {parsed.from_to}")
+                dataset = initFramesDataset(parsed.frames_dir, parsed.from_to)
+            else:
+                assert False # invalid input
+
+            #create camera
+            cameraModel = cameraModels[modelName]
+            cam = kcc.CameraGeometry(cameraModel, targetConfig, dataset, verbose=(parsed.verbose))
+
+            #extract the targets
+            multithreading = not (parsed.verbose)
+            observations = kc.extractCornersFromDataset(cam.dataset, cam.ctarget.detector, 
+                                                        multithreading=multithreading, clearImages=False,
+                                                        noTransformation=noTransformation,
+                                                        numProcesses=multiprocessing.cpu_count() - 2, # so that computer doesn't explode
+                                                        include_nones_on_fail=True) # include empty for corner extraction export
+
+            if parsed.plot:
+                plotter = PlotCollection.PlotCollection("raw obs")
+                fig = pl.figure()
+                pl.xlim(0, 3424)
+                pl.ylim(2202, 0)
+                for obs in observations:
+                    corners = obs.points()
+                    if corners is not None:
+                        pl.plot(corners[:,0], corners[:,1],'o')
+                plotter.add_figure("cam{0}".format(0), fig)
+                plotter.show()
+            # breakpoint()
+
+            coords_data = ""
+            success_data = ""
+            if parsed.detection_coords:
+                print(f"Writing observations to file {parsed.detection_coords}")
+                os.makedirs(os.path.dirname(parsed.detection_coords), exist_ok=True)
+            if parsed.detection_successes:
+                print(f"Writing detection successes to file {parsed.detection_successes}")
+                os.makedirs(os.path.dirname(parsed.detection_successes), exist_ok=True)
+            detections_data = {}
+            from_idx = parsed.from_to[0] if parsed.from_to else 0
+            to_idx = parsed.from_to[1] if parsed.from_to else len(observations)-1 # inclusive
+            for i, ob in enumerate(observations):
+                idx = i + from_idx
+                num_successes, num_points = 0, 1
+                if ob is not None:
+                    num_points = ob.target().size()
+                    for point_idx in range(num_points):
+                        success, point = ob.imagePoint(point_idx)
+                        if success: num_successes += 1
+                        coords_data += f"{idx},{point[0]},{point[1]}\n"
+                        success_data += f"{idx},{1 if success else 0}\n"
+
+                detections_data[idx] = {
+                    "num_detections": num_successes,
+                    "detections_frac": num_successes / num_points
+                }
+
+            # write everything at once so if we interrupt, we don't have duplicates
+            if parsed.detection_coords:
+                with open(parsed.detection_coords, "a") as coordsfile:
+                    coordsfile.write(coords_data)
+            if parsed.detection_successes:
+                with open(parsed.detection_successes, "a") as successfile:
+                    successfile.write(success_data)
+            detections_path = f"{parsed.output_dir}/detections_per_frame_{from_idx:05d}_{to_idx:05d}.json" if parsed.from_to else f"{parsed.output_dir}/detections_per_frame.json"
+            with open(detections_path, "w") as f:
+                json.dump(detections_data, f)
+
+        else:
+            raise RuntimeError( "Unknown camera model: {0}. Try {1}.".format(modelName, list(cameraModels.keys())) )
+
+if __name__ == "__main__":
+    main()
+#     try:
+#         main()
+#     except Exception,e:
+#         sm.logError("Exception: {0}".format(e))
+#         sys.exit(-1)

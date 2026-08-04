@@ -1,0 +1,23 @@
+.git
+.github
+.vscode
+__pycache__
+*.pyc
+
+# Never include credentials or local environment files in an image build.
+id_ed25519
+id_ed25519.pub
+id_rsa
+id_rsa.pub
+*.pem
+*.key
+.ssh
+.env
+.env.*
+
+# Local/build artifacts.
+build
+devel
+logs
+*.orig
+*.rej
