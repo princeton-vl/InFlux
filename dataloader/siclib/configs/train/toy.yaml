@@ -1,0 +1,9 @@
+# Portable settings for the public toy examples. These are not the optimizer
+# or schedule used for the InFlux++ AnyCalib fine-tuning experiment.
+split: train
+device: cpu
+seed: 0
+steps: 5
+learning_rate: 0.001
+weight_decay: 0.0
+log_every: 1

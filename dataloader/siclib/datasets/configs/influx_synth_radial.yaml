@@ -1,0 +1,13 @@
+defaults:
+  - distortion: influx_pp
+  - _self_
+
+name: influx_synth_radial
+base_dir: data/influx_synth
+im_dir: "${.base_dir}"
+workers: 1
+overwrite: true
+
+# Include radial distortion targets only: k1, k2. This mode supports ray
+# generation and matches the camera mode used for InFlux++ fine-tuning.
+cam_id: radial:2

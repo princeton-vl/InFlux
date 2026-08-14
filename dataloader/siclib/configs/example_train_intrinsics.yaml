@@ -1,0 +1,11 @@
+defaults:
+  - data: influx_synth_radtan
+  - model: tiny_intrinsics
+  - train: toy
+  - _self_
+
+# This deliberately naive example regresses raw pixel-valued intrinsics with
+# Adam. Paper-scale learning rates such as 1e-5 make the update effectively
+# invisible at this target scale, so use a toy-specific learning rate.
+train:
+  learning_rate: 0.01

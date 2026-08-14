@@ -1,0 +1,6 @@
+name: tiny_intrinsics
+hidden_channels: 16
+# Initialize raw fx and fy to this multiplier times max(image height,
+# image width), initialize cx and cy to the image center, and initialize
+# distortion to zero. The network predicts a raw residual around this prior.
+focal_prior_multiplier: 1.5

@@ -1,0 +1,6 @@
+defaults:
+  - influx_synth
+  - _self_
+
+# Use with radial:2 H5 files. Ray-grid supervision is supported for this mode.
+produce_rays: true

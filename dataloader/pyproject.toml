@@ -1,0 +1,47 @@
+# This packaging configuration has been modified from AnyCalib for the InFlux project.
+
+[build-system]
+requires = ["setuptools>=68,<82", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "influx-synth-dataloader"
+version = "0.1.0"
+description = "H5 preparation and PyTorch data loading for InFlux-Synth"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = [
+    "albumentations<2",
+    "h5py",
+    "hydra-core",
+    "kornia",
+    "matplotlib",
+    "numpy",
+    "omegaconf",
+    "opencv-python-headless>=4.9.0.80",
+    "pandas",
+    "pillow",
+    "scipy",
+    "torch",
+    "torchvision",
+    "tqdm",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["anycalib*", "siclib*"]
+
+[tool.setuptools.package-data]
+siclib = [
+    "configs/**/*.yaml",
+    "datasets/configs/**/*.yaml",
+]
+
+[tool.ruff]
+src = ["anycalib", "siclib", "examples"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["anycalib", "siclib"]

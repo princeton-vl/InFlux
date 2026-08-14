@@ -1,0 +1,7 @@
+defaults:
+  - influx_synth
+  - _self_
+
+# Use with radtan:4 H5 files. Projection/unprojection-dependent outputs,
+# including ray grids, are not implemented for this camera mode.
+produce_rays: false

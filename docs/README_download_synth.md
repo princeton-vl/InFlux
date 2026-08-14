@@ -1,6 +1,6 @@
-# Downloading and Extracting InFlux-Synth
+# Downloading and Extracting InFlux++ Synth
 
-[InFlux-Synth](https://huggingface.co/datasets/princeton-vl/InFlux-Synth) is the synthetic training dataset introduced as InFlux++ Synth.
+InFlux++ Synth is the synthetic training dataset introduced in InFlux++ and distributed through the [InFlux-Synth](https://huggingface.co/datasets/princeton-vl/InFlux-Synth) Hugging Face repository.
 
 The `influx-download-synth` utility supports:
 

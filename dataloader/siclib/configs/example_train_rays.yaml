@@ -1,0 +1,10 @@
+defaults:
+  - data: influx_synth_radial
+  - model: tiny_rays
+  - train: toy
+  - _self_
+
+# Unit ray targets are order-one, so retain the learning rate used by the
+# already validated dense-ray example.
+train:
+  learning_rate: 0.003

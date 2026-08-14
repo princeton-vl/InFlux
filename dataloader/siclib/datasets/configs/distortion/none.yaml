@@ -1,0 +1,28 @@
+# The numeric settings are retained so the two distortion profiles share one
+# configuration schema. They are ignored when profile is "none".
+profile: none
+
+sensor:
+  width_m: 0.032
+  height_m: 0.018
+
+corner_displacement:
+  min_px: -50.0
+  max_px: 80.0
+  std_px: 50.0
+  mean_by_focal_px:
+    - [1500.0, 20.0]
+    - [30000.0, 80.0]
+
+top_mid_factor:
+  min: -0.10
+  max: 0.50
+  mean: 0.14285714285714285
+  std: 0.15
+
+top_mid_displacement:
+  min_px: -25.0
+  max_px: 40.0
+
+tangential:
+  std: 0.0001

@@ -1,0 +1,14 @@
+defaults:
+  - distortion: influx_pp
+  - _self_
+
+name: influx_synth_radtan
+base_dir: data/influx_synth
+im_dir: "${.base_dir}"
+workers: 1
+overwrite: true
+
+# Include radial and tangential distortion targets: k1, k2, p1, p2.
+# Projection/unprojection-dependent functionality such as ray generation is
+# not supported for this mode.
+cam_id: radtan:4

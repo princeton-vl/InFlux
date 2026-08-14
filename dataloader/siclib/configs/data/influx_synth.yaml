@@ -1,0 +1,35 @@
+name: influx_synth_dataset
+dataset_dir: data/influx_synth
+
+preprocessing:
+  edge_divisible_by: 14
+
+# Shared image transformation used by the released examples. The aspect-ratio
+# interval matches the resolved InFlux++ fine-tuning configuration.
+im_geom_transform:
+  aspect_ratio: [0.5, 0.632812]
+  resolution: 102_400
+  change_pixel_ar: false
+  crop: null
+  # Inactive while both crop is null and change_pixel_ar is false. It becomes
+  # active if either operation is enabled through an override.
+  edit_prob: 0.5
+
+augmentations:
+  name: influx_synth
+grayscale: false
+
+# Portable example defaults. The paper run used larger global batch sizes and
+# more workers on eight GPUs; those execution settings are documented rather
+# than used as public defaults.
+train_batch_size: 2
+val_batch_size: 2
+test_batch_size: 2
+num_workers: 1
+prefetch_factor: 2
+shuffle_training: true
+
+# Mode-specific data configs override this when appropriate.
+produce_rays: false
+reseed: false
+seed: 0
