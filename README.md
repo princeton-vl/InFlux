@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://arxiv.org/abs/2607.05389">
-    <img src="./media/influx_pp_teaser.gif" alt="InFlux++ overview" width="98%">
+    <img src="./media/influx_pp_gallery.png" alt="InFlux++ overview" width="98%">
   </a>
 </p>
 
@@ -121,7 +121,7 @@ If you find our real-world benchmark, synthetic training data, or code useful, p
 
 <p align="center">
   <a href="https://arxiv.org/abs/2510.23589">
-    <img src="./media/main_fig.png" alt="InFlux benchmark overview" width="98%">
+    <img src="./media/influx_gallery.png" alt="InFlux benchmark overview" width="98%">
   </a>
 </p>
 
