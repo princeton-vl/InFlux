@@ -54,5 +54,5 @@ influx-upload --help
 | Download InFlux++ Synth | Select dataset partitions and modalities, download samples or complete partitions, and optionally extract the data | [Download and Extract InFlux++ Synth](README_download_synth.md) |
 | Submit and evaluate predictions | Generate submission templates, validate and upload predictions, receive results, and manage how evaluated results appear on the leaderboard | [Submit and Evaluate Results](README_evaluation.md) |
 | Use the InFlux++ Synth data loader | Load RGB images and camera metadata and apply lens distortion and other data augmentations | [InFlux++ Synth Data Loader](../dataloader/README.md) |
-| Use the Kalibr extension | Build and use the modified Kalibr release from the original InFlux work | [Kalibr Extension](../third_party/kalibr/README.md) |
-| Use the InFlux utility scripts | Install and use the scripts that supported development of the real-world benchmark and calibration lookup tables | [InFlux Utility Scripts](../influx/README.md) |
+| Use the Kalibr extension | Build and use the modified Kalibr release from the original InFlux work | [Kalibr Extension](../third_party/kalibr) |
+| Use the InFlux utility scripts | Install and use the scripts that supported development of the real-world benchmark and calibration lookup tables | [InFlux Utility Scripts](../influx) |
