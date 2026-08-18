@@ -8,7 +8,7 @@ In addition to data augmentation, this directory provides utilities for preparin
 
 This data loader is derived in part from [AnyCalib](https://github.com/javrtg/AnyCalib).
 
-**Resources:** [InFlux-Synth Dataset](https://huggingface.co/datasets/princeton-vl/InFlux-Synth) · [Download and Extraction](../docs/README_download_synth.md) · [InFlux++ Paper](https://arxiv.org/abs/2607.05389)
+**Resources:** [InFlux++ Synth Dataset](https://huggingface.co/datasets/princeton-vl/InFlux-Synth) · [Download and Extraction](../docs/README_download_synth.md) · [InFlux++ Paper](https://arxiv.org/abs/2607.05389)
 
 ## Getting Started
 

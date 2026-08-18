@@ -11,7 +11,7 @@
   ·
   <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Real"><strong>InFlux-Real</strong></a>
   ·
-  <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Synth"><strong>InFlux-Synth</strong></a>
+  <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Synth"><strong>InFlux++ Synth</strong></a>
   ·
   <a href="https://influx.cs.princeton.edu/leaderboard"><strong>Leaderboard</strong></a>
 </p>
@@ -186,7 +186,7 @@ For benchmark statistics, file structure, and the ground truth annotation schema
 
 We provide utility scripts and instructions [here](docs/README_download_synth.md) to download selected InFlux++ Synth partitions and modalities and optionally extract them. InFlux++ Synth is intended primarily for training and finetuning dynamic camera intrinsics prediction models. Every video includes per-frame ground truth camera intrinsics and camera pose. A subset of videos additionally includes depth and surface normals.
 
-For dataset statistics, file structure, and details about ground truth modalities and formats, see the [InFlux-Synth dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth).
+For dataset statistics, file structure, and details about ground truth modalities and formats, see the [InFlux++ Synth dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth).
 
 **Related link:** [InFlux++ Synth Data Loader](dataloader/README.md)
 

@@ -209,7 +209,7 @@ For depth and surface normals, use the `.npy` files for numerical analysis. The 
 
 Successfully processed compressed files are removed after extraction.
 
-For complete modality descriptions, array shapes, and coordinate conventions, see the [InFlux-Synth dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth).
+For complete modality descriptions, array shapes, and coordinate conventions, see the [InFlux++ Synth dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth).
 
 ## Check a Fully Extracted Release
 
