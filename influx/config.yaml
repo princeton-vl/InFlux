@@ -1,0 +1,100 @@
+# Default paths - modify as needed
+# TODO: add documentation on each path
+LENS_SETTINGS_DIR: /data1/datasets/autocalib
+LENS_SETTINGS_DIR_SYNTH: /data2/datasets/autocalib
+
+
+# === real_calib absolute paths ===
+real_calib:
+  VIDEO_DEST_DIR: /data1/datasets/autocalib/real/videos  # landing folder for copied videos before they are sorted into experiment folders
+  EXP_ROOT: /data1/datasets/autocalib/real  # folder where sorted experiment folders are created and stored
+
+  # Paths to run calibration experiment queue
+  QUEUE_FILE: /data1/datasets/autocalib/queue.txt  # queue of experiment commands to be processed
+  COMPLETED_FILE: /data1/datasets/autocalib/completed.txt  # list of experiment commands that have successfully been completed
+  ONHOLD_FILE: /data1/datasets/autocalib/onhold.txt  # list of experiment commands that did not complete successfully; only will be written to if 'skip' flag is present
+  SKIP_IF_FAIL_FLAG: /data1/datasets/autocalib/skip  # create this file to enable skipping failed experiments and logging them to ONHOLD_FILE
+
+# === real_world absolute paths ===
+real_world:
+  VIDEO_ROOT: /data1/datasets/autocalib/real_world_batch2  # root folder where all real-world benchmark videos are stored
+
+  # Paths to run calibration experiment queue
+  QUEUE_FILE: /data1/datasets/autocalib/queue.txt  # queue of experiment commands to be processed
+  COMPLETED_FILE: /data1/datasets/autocalib/completed.txt  # list of experiment commands that have successfully been completed
+  ONHOLD_FILE: /data1/datasets/autocalib/onhold.txt  # list of experiment commands that did not complete successfully; only will be written to if 'skip' flag is present
+  SKIP_IF_FAIL_FLAG: /data1/datasets/autocalib/skip  # create this file to enable skipping failed experiments and logging them to ONHOLD_FILE
+
+# === lut_creation absolute paths ===
+lut_creation:
+  # TODO: move select_trials hardcoded paths in here, once you figure out what's going on with synthetic
+  SELECTED_TRIALS_DIR: /data2/datasets/autocalib/results/real  # folder where selected trials json files are written to and stored
+  # Generating real world gt paths
+  VIDEO_ROOT: /data2/real_world_get_gt  # root folder where all real-world benchmark videos are stored
+
+# Valid cameras and lenses, along with hardware properties and experiment settings
+cameras:
+  arri:
+    sensor_width_mm: 28.25
+    sensor_height_mm: 18.17
+    sensor_resolution_x: 3424
+    sensor_resolution_y: 2202
+    resolution_percentage: 100
+
+lenses:
+  canon17:
+    # Hardware properties
+    min_lens_focal_length: 17
+    max_lens_focal_length: 120
+    min_focus_distance: 853.44
+    lens_name: Canon CINE-SERVO (17-120mm)
+    # Experiment setting parameters - modify as needed
+    max_board_size: 0.8
+    soft_min_focus_distance: 1500
+    # Synthetic experiment setting parameters
+    min_k1: -0.15
+
+  canon17v2:
+    # Hardware properties
+    min_lens_focal_length: 17
+    max_lens_focal_length: 120
+    min_focus_distance: 853.44
+    lens_name: Canon CINE-SERVO (17-120mm) v2
+    # Experiment setting parameters - modify as needed
+    max_board_size: 6.4
+    soft_min_focus_distance: 1500
+    # Synthetic experiment setting parameters
+    min_k1: -0.15
+
+  premista80:
+    # Hardware properties
+    min_lens_focal_length: 80
+    max_lens_focal_length: 250
+    min_focus_distance: 1500
+    lens_name: Fujinon Premista (80-250mm)
+    # Experiment setting parameters - modify as needed
+    max_board_size: 0.8
+    soft_min_focus_distance: 2500
+    # Synthetic experiment setting parameters
+    min_k1: -0.6
+
+  premista80v2:
+    # Hardware properties
+    min_lens_focal_length: 80
+    max_lens_focal_length: 250
+    min_focus_distance: 1500
+    lens_name: Fujinon Premista (80-250mm) v2
+    # Experiment setting parameters - modify as needed
+    max_board_size: 6.4
+    soft_min_focus_distance: 2500
+    # Synthetic experiment setting parameters
+    min_k1: -0.6
+
+
+# Global experiment setting parameters
+n_focus_distance_samples: 9
+
+# Metadata parsing settings
+metadata_lens_mapping:
+  Premista80-250mmT2.9-3.5 F: premista80
+  CN7x17 KAS S/P1: canon17
