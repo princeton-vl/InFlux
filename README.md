@@ -35,7 +35,7 @@ The InFlux project provides a **unified real-world benchmark**, **synthetic trai
 | Work | Main contributions | Public releases |
 |---|---|---|
 | **[InFlux](https://proceedings.neurips.cc/paper_files/paper/2025/file/8a8eca190088852067b4e8cc1b907122-Paper-Datasets_and_Benchmarks_Track.pdf)** | <ul><li>Introduced the first real-world benchmark with per-frame ground truth camera intrinsics for videos with dynamic intrinsics</li><li>Extended Kalibr to improve calibration accuracy and robustness</li></ul> | <ul><li>The <code>influx/</code> partition of <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Real">InFlux-Real</a></li><li><a href="https://github.com/princeton-vl/InFlux/tree/main/third_party/kalibr">Kalibr extension</a></li></ul> |
-| **[InFlux++](https://arxiv.org/abs/2607.05389)** | <ul><li>Introduced InFlux++ Real, expanding the diversity of real-world scenes, subject motion, and camera trajectories</li><li>Introduced InFlux++ Synth, which contains synthetic training videos with per-frame ground truth intrinsics, camera pose, and additional annotations</li></ul> | <ul><li>The <code>influx_pp_real/</code> partition of <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Real">InFlux-Real</a></li><li><a href="https://huggingface.co/datasets/princeton-vl/InFlux-Synth">InFlux++ Synth</a></li><li><a href="dataloader/README.md">InFlux++ Synth data loader</a></li></ul> |
+| **[InFlux++](https://arxiv.org/abs/2607.05389)** | <ul><li>Introduced InFlux++ Real, expanding the diversity of real-world scenes, subject motion, and camera trajectories</li><li>Introduced InFlux++ Synth, which contains synthetic training videos with per-frame ground truth intrinsics, camera pose, and additional annotations</li></ul> | <ul><li>The <code>influx_pp_real/</code> partition of <a href="https://huggingface.co/datasets/princeton-vl/InFlux-Real">InFlux-Real</a></li><li><a href="https://huggingface.co/datasets/princeton-vl/InFlux-Synth">InFlux++ Synth</a></li><li><a href="dataloader">InFlux++ Synth data loader</a></li></ul> |
 
 ## Publications and Citation
 
@@ -188,7 +188,7 @@ We provide utility scripts and instructions [here](docs/README_download_synth.md
 
 For dataset statistics, file structure, and details about ground truth modalities and formats, see the [InFlux++ Synth dataset card](https://huggingface.co/datasets/princeton-vl/InFlux-Synth).
 
-**Related link:** [InFlux++ Synth Data Loader](dataloader/README.md)
+**Related link:** [InFlux++ Synth Data Loader](dataloader)
 
 ### Submit and Evaluate Results
 
@@ -206,7 +206,7 @@ Users can also hide a published result or update its public display name, public
 
 The InFlux++ work includes an InFlux++ Synth data loader for loading RGB frames with their corresponding camera intrinsics.
 
-Setup and usage instructions are available [here](dataloader/README.md).
+Setup and usage instructions are available [here](dataloader).
 
 The data loader also supports applying lens distortion to the released undistorted RGB images, as well as other forms of data augmentation that may be useful during training.
 
@@ -214,7 +214,7 @@ The data loader also supports applying lens distortion to the released undistort
 
 The original InFlux work includes an extension to Kalibr for more accurate and robust camera calibration on the real-world benchmark.
 
-Setup and usage instructions are available [here](third_party/kalibr/).
+Setup and usage instructions are available [here](third_party/kalibr).
 
 The release contains the modified Kalibr source used by the InFlux calibration pipeline.
 
@@ -222,7 +222,7 @@ The release contains the modified Kalibr source used by the InFlux calibration p
 
 The original InFlux release includes utility scripts used to develop the real-world benchmark and its calibration lookup tables.
 
-Setup instructions and an index of the component-specific documentation are available [here](influx/README.md).
+Setup instructions and an index of the component-specific documentation are available [here](influx).
 
 ## Contact
 
