@@ -11,7 +11,7 @@ maintainers = [
     {name = "Erich Liang", email = "el1685@princeton.edu"}
 ]
 license = {file = "LICENSE_CODE.md"}
-requires-python = ">=3.10"
+requires-python = "==3.11.*"
 dependencies = [
     "requests",
     "requests-toolbelt",
@@ -23,23 +23,17 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "evo",
-    "mplcursors",
-    "numpy",
-    "opencv-contrib-python",
+    "bpy==4.2.0",
+    "ImageIO",
+    "kneed",
     "matplotlib",
+    "numpy<2",
+    "opencv-python",
+    "pandas",
+    "psutil",
+    "PyYAML",
     "scipy",
-    "networkx",
-    "tqdm",
-    "pyqt5",
-    "g2o-python",
-    "pykalman",
-    "OneEuroFilter",
-    "filterpy",
-    "pyarrow",
-    "h5py",
-    "pomegranate",
-    "requests-toolbelt"
+    "seaborn",
 ]
 
 [project.urls]
