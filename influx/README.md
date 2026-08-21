@@ -15,7 +15,7 @@ pip install -e ".[dev]"
 
 Some workflows require external tools that are not installed through `pip`:
 
-- **InFlux-modified Kalibr Docker image:** Used to perform camera calibration for real and synthetic calibration experiments. Build the image named `kalibr:latest` by following the [Kalibr extension guide](../third_party/kalibr/README.md).
+- **InFlux-modified Kalibr Docker image:** Used to perform camera calibration for real and synthetic calibration experiments. Build the image named `kalibr:latest` by following the [Kalibr extension guide](../third_party/kalibr).
 - **Docker:** Used to run the InFlux-modified Kalibr image during camera calibration.
 - **`rsync`:** Used by the camera card ingestion scripts to copy recorded media into the configured local data directories.
 - **ARRI Reference Tool 0.3.0 (`art-cmd`):** Used to process ARRIRAW footage filmed for InFlux and InFlux++ and to export frame-level camera and lens metadata. The InFlux utilities were developed against version 0.3.0. Obtain ARRI Reference Tool from the [official ARRI download page](https://www.arri.com/en/learn-help/learn-help-camera-system/tools/arri-reference-tool). Newer releases may work, but the generated metadata JSON schema may differ from the version expected by these scripts.
