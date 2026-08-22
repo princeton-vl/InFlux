@@ -9,6 +9,7 @@ bounded, actionable messages rather than dumping HTML error pages.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import math
@@ -25,7 +26,6 @@ from uuid import UUID
 import requests
 from requests_toolbelt.multipart.encoder import (
     MultipartEncoder,
-    MultipartEncoderMonitor,
 )
 from tqdm import tqdm
 
@@ -283,9 +283,11 @@ def friendly_http_error(
         )
     elif status == 413:
         message = (
-            f"The server rejected the file as too large. This client allows at most "
-            f"{human_bytes(MAX_FILE_SIZE)}. Confirm that client and server limits "
-            "match, or upload a compact JSON representation."
+            "The server rejected an upload request as too large. The chunked-v1 "
+            "client normally keeps every file-containing request below 10 MiB. "
+            "Confirm that the chunked server and client were deployed together and "
+            "that the public frontend accepts the configured chunk size. Do not "
+            "reduce prediction precision as a transport workaround."
         )
     elif status == 429:
         payload = response_json_or_none(response) or {}
@@ -888,53 +890,362 @@ def check_submission_validity(
         )
 
 
-def _upload_post(
+def _sha256_path(file_path: Path) -> str:
+    digest = hashlib.sha256()
+    with file_path.open("rb") as handle:
+        while True:
+            block = handle.read(1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _chunk_upload_url(url: str, upload_id: str) -> str:
+    return f"{url.rstrip('/')}/{upload_id}/"
+
+
+def _start_chunked_upload(
+    upload_id: str,
+    file_path: Path,
+    *,
+    url: str,
+    full_sha256: str,
+) -> dict[str, Any]:
+    item, request_headers = _require_runtime_session()
+    total_size = file_path.stat().st_size
+    request_data = {
+        "action": "start",
+        "original_filename": file_path.name,
+        "total_size_bytes": str(total_size),
+        "sha256": full_sha256,
+    }
+    last_error: UploadSubmissionError | None = None
+    for attempt in range(1, 3):
+        try:
+            response = request_with_friendly_errors(
+                item,
+                "POST",
+                _chunk_upload_url(url, upload_id),
+                stage=STAGE_UPLOAD,
+                data=request_data,
+                request_headers=request_headers,
+                timeout_seconds=REQUEST_TIMEOUT_SECONDS,
+                upload_id=upload_id,
+            )
+            return require_json_object(response, stage=STAGE_UPLOAD)
+        except UploadSubmissionError as exc:
+            last_error = exc
+            try:
+                status = _get_chunked_upload_status(upload_id, url=url)
+                status_size = int(status.get("total_size_bytes", -1))
+            except (UploadSubmissionError, TypeError, ValueError):
+                status = {}
+                status_size = -1
+            if (
+                status.get("protocol") == "chunked-v1"
+                and status.get("sha256") == full_sha256
+                and status_size == total_size
+            ):
+                print(
+                    "Upload-start response was interrupted, but the server reports "
+                    "the matching chunked upload state.",
+                    file=sys.stderr,
+                )
+                return status
+            if attempt == 1:
+                print(
+                    "Upload start was not confirmed; retrying the idempotent start "
+                    "step once.",
+                    file=sys.stderr,
+                )
+                time.sleep(2)
+                continue
+            break
+    assert last_error is not None
+    raise last_error
+
+
+def _get_chunked_upload_status(
+    upload_id: str,
+    *,
+    url: str,
+) -> dict[str, Any]:
+    item, request_headers = _require_runtime_session()
+    response = request_with_friendly_errors(
+        item,
+        "GET",
+        _chunk_upload_url(url, upload_id),
+        stage=STAGE_UPLOAD,
+        request_headers=request_headers,
+        timeout_seconds=REQUEST_TIMEOUT_SECONDS,
+        upload_id=upload_id,
+    )
+    return require_json_object(response, stage=STAGE_UPLOAD)
+
+
+def _post_upload_chunk(
+    upload_id: str,
+    *,
+    url: str,
+    chunk_index: int,
+    chunk_bytes: bytes,
+) -> dict[str, Any]:
+    item, base_headers = _require_runtime_session()
+    chunk_sha256 = hashlib.sha256(chunk_bytes).hexdigest()
+    encoder = MultipartEncoder(
+        fields={
+            "action": "chunk",
+            "chunk_index": str(chunk_index),
+            "chunk_sha256": chunk_sha256,
+            "chunk": (
+                f"chunk-{chunk_index:06d}.bin",
+                chunk_bytes,
+                "application/octet-stream",
+            ),
+        }
+    )
+    request_headers = dict(base_headers)
+    request_headers["Content-Type"] = encoder.content_type
+    response = request_with_friendly_errors(
+        item,
+        "POST",
+        _chunk_upload_url(url, upload_id),
+        stage=STAGE_UPLOAD,
+        data=encoder,
+        request_headers=request_headers,
+        timeout_seconds=UPLOAD_TIMEOUT_SECONDS,
+        upload_id=upload_id,
+    )
+    return require_json_object(response, stage=STAGE_UPLOAD)
+
+
+def _complete_chunked_upload(
+    upload_id: str,
+    *,
+    url: str,
+    full_sha256: str,
+    total_size: int,
+) -> dict[str, Any]:
+    item, request_headers = _require_runtime_session()
+    last_error: UploadSubmissionError | None = None
+    for attempt in range(1, 3):
+        try:
+            response = request_with_friendly_errors(
+                item,
+                "POST",
+                _chunk_upload_url(url, upload_id),
+                stage=STAGE_UPLOAD,
+                data={"action": "complete"},
+                request_headers=request_headers,
+                timeout_seconds=UPLOAD_TIMEOUT_SECONDS,
+                upload_id=upload_id,
+            )
+            return require_json_object(response, stage=STAGE_UPLOAD)
+        except UploadSubmissionError as exc:
+            last_error = exc
+            try:
+                status = _get_chunked_upload_status(upload_id, url=url)
+            except UploadSubmissionError:
+                status = {}
+            try:
+                status_size = int(status.get("total_size_bytes", -1))
+            except (TypeError, ValueError):
+                status_size = -1
+            if (
+                status.get("completed") is True
+                and status.get("state") in {"FILE_RECEIVED", "QUEUED"}
+                and status.get("sha256") == full_sha256
+                and status_size == total_size
+            ):
+                print(
+                    "Upload-completion response was interrupted, but the server "
+                    "reports that this exact file is committed.",
+                    file=sys.stderr,
+                )
+                return status
+            if attempt == 1:
+                print(
+                    "Upload completion was not confirmed; retrying the idempotent "
+                    "complete step once.",
+                    file=sys.stderr,
+                )
+                time.sleep(2)
+                continue
+            break
+    assert last_error is not None
+    raise last_error
+
+
+def _chunk_file_size(
+    *,
+    total_size: int,
+    chunk_size: int,
+    chunk_count: int,
+    chunk_index: int,
+) -> int:
+    if chunk_index < 0 or chunk_index >= chunk_count:
+        raise UploadSubmissionError(
+            f"Server returned invalid chunk index {chunk_index}."
+        )
+    if chunk_index < chunk_count - 1:
+        return chunk_size
+    return total_size - chunk_size * (chunk_count - 1)
+
+
+def _chunked_upload_post(
     upload_id: str,
     file_path: Path,
     *,
     url: str,
 ) -> dict[str, Any]:
-    item, base_headers = _require_runtime_session()
     total_size = file_path.stat().st_size
+    full_sha256 = _sha256_path(file_path)
+    start = _start_chunked_upload(
+        upload_id,
+        file_path,
+        url=url,
+        full_sha256=full_sha256,
+    )
+
+    if start.get("protocol") != "chunked-v1":
+        raise UploadSubmissionError(
+            "Server did not advertise the required chunked-v1 upload protocol."
+        )
+    try:
+        chunk_size = int(start["chunk_size"])
+        chunk_count = int(start["chunk_count"])
+        server_total = int(start["total_size_bytes"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise UploadSubmissionError(
+            "Server returned invalid chunked-upload metadata."
+        ) from exc
+    if chunk_size <= 0 or chunk_size > 10 * 1024 * 1024:
+        raise UploadSubmissionError(
+            f"Server requested unsafe chunk size {chunk_size} bytes."
+        )
+    if chunk_count <= 0 or chunk_count > 1024:
+        raise UploadSubmissionError(
+            f"Server returned invalid chunk count {chunk_count}."
+        )
+    expected_chunk_count = (total_size + chunk_size - 1) // chunk_size
+    if chunk_count != expected_chunk_count:
+        raise UploadSubmissionError(
+            "Server returned a chunk count inconsistent with file and chunk sizes."
+        )
+    if server_total != total_size or start.get("sha256") != full_sha256:
+        raise UploadSubmissionError(
+            "Server chunked-upload metadata does not match the local file."
+        )
+    if start.get("completed") is True:
+        if start.get("state") not in {"FILE_RECEIVED", "QUEUED"}:
+            raise UploadSubmissionError(
+                "Server reported a completed upload in an invalid submission state."
+            )
+        return start
+
+    try:
+        received = {int(value) for value in start.get("received_chunks", [])}
+    except (TypeError, ValueError) as exc:
+        raise UploadSubmissionError(
+            "Server returned an invalid received-chunk list."
+        ) from exc
+    if any(index < 0 or index >= chunk_count for index in received):
+        raise UploadSubmissionError(
+            "Server returned an out-of-range received chunk index."
+        )
+
+    initial_bytes = sum(
+        _chunk_file_size(
+            total_size=total_size,
+            chunk_size=chunk_size,
+            chunk_count=chunk_count,
+            chunk_index=index,
+        )
+        for index in received
+    )
     progress_bar = tqdm(
         total=total_size,
+        initial=initial_bytes,
         unit="B",
         unit_scale=True,
         desc="Uploading",
     )
 
-    def progress_callback(monitor: MultipartEncoderMonitor) -> None:
-        progress_bar.update(monitor.bytes_read - progress_bar.n)
-
     try:
         with file_path.open("rb") as handle:
-            encoder = MultipartEncoder(
-                fields={
-                    "file": (
-                        file_path.name,
-                        handle,
-                        "application/json",
+            for index in range(chunk_count):
+                expected_size = _chunk_file_size(
+                    total_size=total_size,
+                    chunk_size=chunk_size,
+                    chunk_count=chunk_count,
+                    chunk_index=index,
+                )
+                if index in received:
+                    continue
+                handle.seek(index * chunk_size)
+                chunk_bytes = handle.read(expected_size)
+                if len(chunk_bytes) != expected_size:
+                    raise UploadSubmissionError(
+                        f"Could not read chunk {index}: expected {expected_size} "
+                        f"bytes, got {len(chunk_bytes)}."
                     )
-                }
-            )
-            monitor = MultipartEncoderMonitor(encoder, progress_callback)
-            request_headers = dict(base_headers)
-            request_headers["Content-Type"] = monitor.content_type
-            response = request_with_friendly_errors(
-                item,
-                "POST",
-                f"{url}/{upload_id}/",
-                stage=STAGE_UPLOAD,
-                data=monitor,
-                request_headers=request_headers,
-                timeout_seconds=UPLOAD_TIMEOUT_SECONDS,
-                upload_id=upload_id,
-            )
+
+                last_error: UploadSubmissionError | None = None
+                confirmed = False
+                for attempt in range(1, 3):
+                    try:
+                        _post_upload_chunk(
+                            upload_id,
+                            url=url,
+                            chunk_index=index,
+                            chunk_bytes=chunk_bytes,
+                        )
+                        confirmed = True
+                        break
+                    except UploadSubmissionError as exc:
+                        last_error = exc
+                        try:
+                            status = _get_chunked_upload_status(
+                                upload_id,
+                                url=url,
+                            )
+                            server_received = {
+                                int(value)
+                                for value in status.get("received_chunks", [])
+                            }
+                        except (UploadSubmissionError, TypeError, ValueError):
+                            server_received = set()
+                        if index in server_received:
+                            confirmed = True
+                            break
+                        if attempt == 1:
+                            print(
+                                f"Chunk {index + 1}/{chunk_count} was not "
+                                "confirmed; retrying once.",
+                                file=sys.stderr,
+                            )
+                            time.sleep(2)
+                if not confirmed:
+                    assert last_error is not None
+                    raise last_error
+                received.add(index)
+                progress_bar.update(expected_size)
+                if verbose:
+                    print(
+                        f"[verbose] uploaded chunk {index + 1}/{chunk_count} "
+                        f"({human_bytes(expected_size)})",
+                        file=sys.stderr,
+                    )
     finally:
         progress_bar.close()
 
-    return require_json_object(response, stage=STAGE_UPLOAD)
-
+    return _complete_chunked_upload(
+        upload_id,
+        url=url,
+        full_sha256=full_sha256,
+        total_size=total_size,
+    )
 
 def get_submission_status(upload_id: str) -> dict[str, Any]:
     item, request_headers = _require_runtime_session()
@@ -1011,7 +1322,7 @@ def upload_file(
     if url is None:
         url = f"{website}/upload"
 
-    upload_payload = _upload_post(upload_id, path, url=url)
+    upload_payload = _chunked_upload_post(upload_id, path, url=url)
     print(upload_payload.get("message", "File uploaded successfully."))
     state = upload_payload.get("state")
     if state:
