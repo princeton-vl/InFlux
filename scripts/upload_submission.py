@@ -52,6 +52,7 @@ MAX_FILE_SIZE = 200 * 1024 * 1024  # 200 MiB
 MAX_JSON_DEPTH = 10
 REQUEST_TIMEOUT_SECONDS = 60
 UPLOAD_TIMEOUT_SECONDS = 15 * 60
+TRANSIENT_RETRY_DELAYS_SECONDS = (2, 5, 10, 20)
 MAX_ERROR_DETAIL_CHARS = 320
 MAX_VALIDATION_DETAIL_ITEMS = 8
 SUPPORT_EMAIL = "influxbenchmark@gmail.com"
@@ -73,6 +74,21 @@ class RetryableVerificationCodeError(UploadSubmissionError):
     def __init__(self, message: str, *, attempts_remaining: int):
         super().__init__(message)
         self.attempts_remaining = attempts_remaining
+
+
+class TransientTransportError(UploadSubmissionError):
+    """No conclusive HTTP response was received from the shared frontend."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: str,
+        request_may_have_reached_server: bool,
+    ):
+        super().__init__(message)
+        self.stage = stage
+        self.request_may_have_reached_server = request_may_have_reached_server
 
 
 STAGE_BOOTSTRAP = "bootstrap"
@@ -401,6 +417,81 @@ def csrf_token_from_session(item: requests.Session) -> str | None:
     return None
 
 
+def _is_certificate_verification_failure(exc: BaseException) -> bool:
+    text = str(exc).casefold()
+    markers = (
+        "certificate verify failed",
+        "hostname mismatch",
+        "self signed certificate",
+        "certificate has expired",
+        "unable to get local issuer certificate",
+        "certificate verify error",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _transient_retry_message(
+    *,
+    label: str,
+    attempt: int,
+    maximum_attempts: int,
+    delay_seconds: int,
+) -> str:
+    return (
+        f"Transient TCP/TLS/frontend failure while {label}; retrying the same "
+        f"idempotent step in {delay_seconds} seconds "
+        f"({attempt}/{maximum_attempts})."
+    )
+
+
+def request_with_transient_retries(
+    item: requests.Session,
+    method: str,
+    url: str,
+    *,
+    retry_label: str,
+    stage: str,
+    data: Any = None,
+    request_headers: dict[str, str] | None = None,
+    timeout_seconds: int = REQUEST_TIMEOUT_SECONDS,
+    upload_id: str | None = None,
+) -> requests.Response:
+    """Retry only transport-indeterminate, idempotent requests."""
+
+    maximum_attempts = len(TRANSIENT_RETRY_DELAYS_SECONDS) + 1
+    last_error: TransientTransportError | None = None
+    for attempt in range(1, maximum_attempts + 1):
+        try:
+            return request_with_friendly_errors(
+                item,
+                method,
+                url,
+                stage=stage,
+                data=data,
+                request_headers=request_headers,
+                timeout_seconds=timeout_seconds,
+                upload_id=upload_id,
+            )
+        except TransientTransportError as exc:
+            last_error = exc
+            if attempt >= maximum_attempts:
+                break
+            delay = TRANSIENT_RETRY_DELAYS_SECONDS[attempt - 1]
+            print(
+                _transient_retry_message(
+                    label=retry_label,
+                    attempt=attempt,
+                    maximum_attempts=maximum_attempts,
+                    delay_seconds=delay,
+                ),
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+
+    assert last_error is not None
+    raise last_error
+
+
 def request_with_friendly_errors(
     item: requests.Session,
     method: str,
@@ -423,31 +514,34 @@ def request_with_friendly_errors(
             timeout=timeout_seconds,
         )
     except requests.Timeout as exc:
-        ambiguity = (
-            " Because the request may have reached the server, do not assume it "
-            "failed safely. Check the submission state before creating a duplicate."
-            if stage in {STAGE_UPLOAD, STAGE_FINISH}
-            else ""
-        )
-        raise UploadSubmissionError(
-            f"Timed out after {timeout_seconds} seconds while "
-            f"{stage_label(stage)}.{ambiguity}"
+        may_have_reached = method.upper() != "GET"
+        raise TransientTransportError(
+            f"No conclusive HTTP response was received after {timeout_seconds} "
+            f"seconds while {stage_label(stage)}. This is consistent with a "
+            "temporary TCP/TLS/shared-frontend outage, not a server validation "
+            "decision.",
+            stage=stage,
+            request_may_have_reached_server=may_have_reached,
         ) from exc
     except requests.exceptions.SSLError as exc:
-        raise UploadSubmissionError(
-            f"TLS certificate verification failed while {stage_label(stage)}. "
-            "Check --website and the local certificate configuration."
+        if _is_certificate_verification_failure(exc):
+            raise UploadSubmissionError(
+                f"TLS certificate verification failed while {stage_label(stage)}. "
+                "Check --website and the local certificate configuration."
+            ) from exc
+        raise TransientTransportError(
+            f"The TLS connection did not complete while {stage_label(stage)}. "
+            "This is consistent with a temporary shared-frontend failure.",
+            stage=stage,
+            request_may_have_reached_server=False,
         ) from exc
     except requests.ConnectionError as exc:
-        ambiguity = (
-            " The server may still have received some or all of the request; check "
-            "the submission state before creating a duplicate."
-            if stage in {STAGE_UPLOAD, STAGE_FINISH}
-            else ""
-        )
-        raise UploadSubmissionError(
-            f"Could not connect to {website!r} while {stage_label(stage)}. Check "
-            f"network access, DNS, and --website.{ambiguity}"
+        raise TransientTransportError(
+            f"The TCP connection was interrupted while {stage_label(stage)}. "
+            "This is consistent with a temporary DNS/network/shared-frontend "
+            "failure.",
+            stage=stage,
+            request_may_have_reached_server=method.upper() != "GET",
         ) from exc
     except requests.RequestException as exc:
         raise UploadSubmissionError(
@@ -494,10 +588,11 @@ def initialize_session(website_url: str) -> None:
     website = validate_website(website_url)
     session = requests.Session()
 
-    response = request_with_friendly_errors(
+    response = request_with_transient_retries(
         session,
         "GET",
         f"{website}{SUBMIT_PATH}",
+        retry_label="loading the submission page",
         stage=STAGE_BOOTSTRAP,
     )
     csrf_token = csrf_token_from_session(session)
@@ -531,18 +626,27 @@ def request_verification(args: argparse.Namespace, url: str | None = None) -> st
     if url is None:
         url = f"{website}{SUBMIT_PATH}"
 
-    response = request_with_friendly_errors(
-        item,
-        "POST",
-        url,
-        stage=STAGE_REQUEST,
-        data={
-            "email": args.email,
-            "method_name": args.method_name,
-            "version": args.version,
-        },
-        request_headers=request_headers,
-    )
+    try:
+        response = request_with_friendly_errors(
+            item,
+            "POST",
+            url,
+            stage=STAGE_REQUEST,
+            data={
+                "email": args.email,
+                "method_name": args.method_name,
+                "version": args.version,
+            },
+            request_headers=request_headers,
+        )
+    except TransientTransportError as exc:
+        raise UploadSubmissionError(
+            f"{exc} The create-submission POST is intentionally not retried "
+            "automatically because its response may have been lost after the "
+            "server created a submission and sent email. Wait for the verification "
+            "email before rerunning. Rerun only when no email arrives after the "
+            "normal verification window."
+        ) from exc
     payload = require_json_object(response, stage=STAGE_REQUEST)
     upload_id = payload.get("upload_id")
     try:
@@ -568,10 +672,11 @@ def verify_code(upload_id: str, code: str, url: str | None = None) -> bool:
     if url is None:
         url = f"{website}/verify"
 
-    response = request_with_friendly_errors(
+    response = request_with_transient_retries(
         item,
         "POST",
         f"{url}/{upload_id}/",
+        retry_label="verifying the same submission code",
         stage=STAGE_VERIFY,
         data={"code": code},
         request_headers=request_headers,
@@ -921,7 +1026,7 @@ def _start_chunked_upload(
         "sha256": full_sha256,
     }
     last_error: UploadSubmissionError | None = None
-    for attempt in range(1, 3):
+    for attempt in range(1, len(TRANSIENT_RETRY_DELAYS_SECONDS) + 2):
         try:
             response = request_with_friendly_errors(
                 item,
@@ -936,6 +1041,8 @@ def _start_chunked_upload(
             return require_json_object(response, stage=STAGE_UPLOAD)
         except UploadSubmissionError as exc:
             last_error = exc
+            if not isinstance(exc, TransientTransportError):
+                raise
             try:
                 status = _get_chunked_upload_status(upload_id, url=url)
                 status_size = int(status.get("total_size_bytes", -1))
@@ -953,13 +1060,20 @@ def _start_chunked_upload(
                     file=sys.stderr,
                 )
                 return status
-            if attempt == 1:
+            if attempt <= len(TRANSIENT_RETRY_DELAYS_SECONDS):
+                delay = TRANSIENT_RETRY_DELAYS_SECONDS[attempt - 1]
                 print(
-                    "Upload start was not confirmed; retrying the idempotent start "
-                    "step once.",
+                    _transient_retry_message(
+                        label="starting the matching chunked upload",
+                        attempt=attempt,
+                        maximum_attempts=(
+                            len(TRANSIENT_RETRY_DELAYS_SECONDS) + 1
+                        ),
+                        delay_seconds=delay,
+                    ),
                     file=sys.stderr,
                 )
-                time.sleep(2)
+                time.sleep(delay)
                 continue
             break
     assert last_error is not None
@@ -972,10 +1086,11 @@ def _get_chunked_upload_status(
     url: str,
 ) -> dict[str, Any]:
     item, request_headers = _require_runtime_session()
-    response = request_with_friendly_errors(
+    response = request_with_transient_retries(
         item,
         "GET",
         _chunk_upload_url(url, upload_id),
+        retry_label="checking chunked-upload status",
         stage=STAGE_UPLOAD,
         request_headers=request_headers,
         timeout_seconds=REQUEST_TIMEOUT_SECONDS,
@@ -1029,7 +1144,7 @@ def _complete_chunked_upload(
 ) -> dict[str, Any]:
     item, request_headers = _require_runtime_session()
     last_error: UploadSubmissionError | None = None
-    for attempt in range(1, 3):
+    for attempt in range(1, len(TRANSIENT_RETRY_DELAYS_SECONDS) + 2):
         try:
             response = request_with_friendly_errors(
                 item,
@@ -1044,6 +1159,8 @@ def _complete_chunked_upload(
             return require_json_object(response, stage=STAGE_UPLOAD)
         except UploadSubmissionError as exc:
             last_error = exc
+            if not isinstance(exc, TransientTransportError):
+                raise
             try:
                 status = _get_chunked_upload_status(upload_id, url=url)
             except UploadSubmissionError:
@@ -1064,13 +1181,20 @@ def _complete_chunked_upload(
                     file=sys.stderr,
                 )
                 return status
-            if attempt == 1:
+            if attempt <= len(TRANSIENT_RETRY_DELAYS_SECONDS):
+                delay = TRANSIENT_RETRY_DELAYS_SECONDS[attempt - 1]
                 print(
-                    "Upload completion was not confirmed; retrying the idempotent "
-                    "complete step once.",
+                    _transient_retry_message(
+                        label="completing the same chunked upload",
+                        attempt=attempt,
+                        maximum_attempts=(
+                            len(TRANSIENT_RETRY_DELAYS_SECONDS) + 1
+                        ),
+                        delay_seconds=delay,
+                    ),
                     file=sys.stderr,
                 )
-                time.sleep(2)
+                time.sleep(delay)
                 continue
             break
     assert last_error is not None
@@ -1193,7 +1317,7 @@ def _chunked_upload_post(
 
                 last_error: UploadSubmissionError | None = None
                 confirmed = False
-                for attempt in range(1, 3):
+                for attempt in range(1, len(TRANSIENT_RETRY_DELAYS_SECONDS) + 2):
                     try:
                         _post_upload_chunk(
                             upload_id,
@@ -1205,6 +1329,8 @@ def _chunked_upload_post(
                         break
                     except UploadSubmissionError as exc:
                         last_error = exc
+                        if not isinstance(exc, TransientTransportError):
+                            raise
                         try:
                             status = _get_chunked_upload_status(
                                 upload_id,
@@ -1219,13 +1345,23 @@ def _chunked_upload_post(
                         if index in server_received:
                             confirmed = True
                             break
-                        if attempt == 1:
+                        if attempt <= len(TRANSIENT_RETRY_DELAYS_SECONDS):
+                            delay = TRANSIENT_RETRY_DELAYS_SECONDS[attempt - 1]
                             print(
-                                f"Chunk {index + 1}/{chunk_count} was not "
-                                "confirmed; retrying once.",
+                                _transient_retry_message(
+                                    label=(
+                                        f"uploading chunk {index + 1}/"
+                                        f"{chunk_count}"
+                                    ),
+                                    attempt=attempt,
+                                    maximum_attempts=(
+                                        len(TRANSIENT_RETRY_DELAYS_SECONDS) + 1
+                                    ),
+                                    delay_seconds=delay,
+                                ),
                                 file=sys.stderr,
                             )
-                            time.sleep(2)
+                            time.sleep(delay)
                 if not confirmed:
                     assert last_error is not None
                     raise last_error
@@ -1249,10 +1385,11 @@ def _chunked_upload_post(
 
 def get_submission_status(upload_id: str) -> dict[str, Any]:
     item, request_headers = _require_runtime_session()
-    response = request_with_friendly_errors(
+    response = request_with_transient_retries(
         item,
         "GET",
         f"{website}/submission/{upload_id}/status/",
+        retry_label="checking final submission status",
         stage=STAGE_STATUS,
         request_headers=request_headers,
         upload_id=upload_id,
@@ -1266,7 +1403,7 @@ def finish_upload(upload_id: str) -> dict[str, Any]:
 
     # finish_upload is idempotent. One bounded retry handles a transient reverse
     # proxy or network interruption without creating another submission record.
-    for attempt in range(1, 3):
+    for attempt in range(1, len(TRANSIENT_RETRY_DELAYS_SECONDS) + 2):
         try:
             response = request_with_friendly_errors(
                 item,
@@ -1279,6 +1416,8 @@ def finish_upload(upload_id: str) -> dict[str, Any]:
             return require_json_object(response, stage=STAGE_FINISH)
         except UploadSubmissionError as exc:
             last_error = exc
+            if not isinstance(exc, TransientTransportError):
+                raise
             try:
                 status = get_submission_status(upload_id)
             except UploadSubmissionError:
@@ -1289,13 +1428,23 @@ def finish_upload(upload_id: str) -> dict[str, Any]:
                     "that the submission is QUEUED."
                 )
                 return status
-            if attempt == 1 and status.get("state") == "FILE_RECEIVED":
+            if (
+                attempt <= len(TRANSIENT_RETRY_DELAYS_SECONDS)
+                and status.get("state") in {None, "FILE_RECEIVED"}
+            ):
+                delay = TRANSIENT_RETRY_DELAYS_SECONDS[attempt - 1]
                 print(
-                    "Queueing was not confirmed; retrying the idempotent "
-                    "finish step once.",
+                    _transient_retry_message(
+                        label="queueing the same committed submission",
+                        attempt=attempt,
+                        maximum_attempts=(
+                            len(TRANSIENT_RETRY_DELAYS_SECONDS) + 1
+                        ),
+                        delay_seconds=delay,
+                    ),
                     file=sys.stderr,
                 )
-                time.sleep(2)
+                time.sleep(delay)
                 continue
             break
 
