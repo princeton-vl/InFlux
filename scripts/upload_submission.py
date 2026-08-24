@@ -455,6 +455,7 @@ def request_with_transient_retries(
     request_headers: dict[str, str] | None = None,
     timeout_seconds: int = REQUEST_TIMEOUT_SECONDS,
     upload_id: str | None = None,
+    retry_if_request_may_have_reached_server: bool = True,
 ) -> requests.Response:
     """Retry only transport-indeterminate, idempotent requests."""
 
@@ -473,6 +474,11 @@ def request_with_transient_retries(
                 upload_id=upload_id,
             )
         except TransientTransportError as exc:
+            if (
+                exc.request_may_have_reached_server
+                and not retry_if_request_may_have_reached_server
+            ):
+                raise
             last_error = exc
             if attempt >= maximum_attempts:
                 break
@@ -672,16 +678,34 @@ def verify_code(upload_id: str, code: str, url: str | None = None) -> bool:
     if url is None:
         url = f"{website}/verify"
 
-    response = request_with_transient_retries(
-        item,
-        "POST",
-        f"{url}/{upload_id}/",
-        retry_label="verifying the same submission code",
-        stage=STAGE_VERIFY,
-        data={"code": code},
-        request_headers=request_headers,
-        upload_id=upload_id,
-    )
+    try:
+        response = request_with_transient_retries(
+            item,
+            "POST",
+            f"{url}/{upload_id}/",
+            retry_label="verifying the same submission code",
+            stage=STAGE_VERIFY,
+            data={"code": code},
+            request_headers=request_headers,
+            upload_id=upload_id,
+            retry_if_request_may_have_reached_server=False,
+        )
+    except TransientTransportError as exc:
+        if exc.request_may_have_reached_server:
+            recovery = (
+                "The verification POST may have been accepted, but its response "
+                "and session authorization were not received. Because the code is "
+                "single-use and authorization is session-bound, this ambiguous "
+                "request is not retried automatically. Rerun the upload command "
+                "to create and verify a fresh submission."
+            )
+        else:
+            recovery = (
+                "The verification request could not reach the service after "
+                "bounded retries. Wait for the shared frontend to recover, then "
+                "rerun the upload command."
+            )
+        raise UploadSubmissionError(f"{exc} {recovery}") from exc
     require_json_object(response, stage=STAGE_VERIFY)
     print("Verification successful.")
     return True
