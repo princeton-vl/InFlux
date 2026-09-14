@@ -72,14 +72,16 @@ If you find our real-world benchmark, synthetic training data, or code useful, p
 </p>
 
 ```bibtex
-@misc{liang2026influxrealsyntheticdata,
-    title = {InFlux++: Real and Synthetic Data for Estimating Dynamic Camera Intrinsics},
-    author = {Erich Liang and Caleb Kha-Uong and Chinmaya Saran and Sreemanti Dey and David W. Liu and Junhan Ouyang and Benjamin Zhou and Jia Deng},
-    year = {2026},
-    eprint = {2607.05389},
-    archivePrefix = {arXiv},
-    primaryClass = {cs.CV},
-    url = {https://arxiv.org/abs/2607.05389}
+@inproceedings{liang2026influxpp,
+    author={Liang, Erich and Kha-Uong, Caleb and Saran, Chinmaya and Dey, Sreemanti and Liu, David W. and Ouyang, Junhan and Zhou, Benjamin and Deng, Jia},
+    editor={Favaro, Paolo and Kukelova, Zuzana and Maki, Atsuto and Rohrbach, Anna and Schindler, Konrad and Tombari, Federico},
+    title={{InFlux++}: Real and Synthetic Data for Estimating Dynamic Camera Intrinsics},
+    booktitle={Computer Vision -- ECCV 2026},
+    year={2026},
+    publisher={Springer Nature Switzerland},
+    address={Cham},
+    pages={443--460},
+    isbn={978-3-032-37235-2}
 }
 ```
 
@@ -132,7 +134,7 @@ If you find our real-world benchmark, synthetic training data, or code useful, p
     editor = {D. Belgrave and C. Zhang and H. Lin and R. Pascanu and P. Koniusz and M. Ghassemi and N. Chen},
     pages = {},
     publisher = {Curran Associates, Inc.},
-    title = {InFlux: A Benchmark for Self-Calibration of Dynamic Intrinsics of Video Cameras},
+    title = {{InFlux}: A Benchmark for Self-Calibration of Dynamic Intrinsics of Video Cameras},
     url = {https://proceedings.neurips.cc/paper_files/paper/2025/file/8a8eca190088852067b4e8cc1b907122-Paper-Datasets_and_Benchmarks_Track.pdf},
     volume = {38},
     year = {2025}
