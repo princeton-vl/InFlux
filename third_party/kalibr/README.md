@@ -600,7 +600,7 @@ When using InFlux-modified Kalibr, please cite the InFlux paper:
     editor = {D. Belgrave and C. Zhang and H. Lin and R. Pascanu and P. Koniusz and M. Ghassemi and N. Chen},
     pages = {},
     publisher = {Curran Associates, Inc.},
-    title = {InFlux: A Benchmark for Self-Calibration of Dynamic Intrinsics of Video Cameras},
+    title = {{InFlux}: A Benchmark for Self-Calibration of Dynamic Intrinsics of Video Cameras},
     url = {https://proceedings.neurips.cc/paper_files/paper/2025/file/8a8eca190088852067b4e8cc1b907122-Paper-Datasets_and_Benchmarks_Track.pdf},
     volume = {38},
     year = {2025}
